@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { devtools } from '@tanstack/devtools-vite'
+import tsconfigPaths from 'vite-tsconfig-paths'
+import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import viteReact from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [devtools(), tsconfigPaths({ projects: ['./tsconfig.json'] }), tailwindcss(), tanstackStart(), viteReact()],
   server: {
-    port: 5173,
+    port: 3000,
   },
 })

@@ -53,6 +53,9 @@ Preferred local package manager: **Bun**
 ```bash
 bun install
 bun run dev
+bun run lint
+bun run test:bun
+bun run build
 ```
 
 If Bun is not available, npm also works:
@@ -64,8 +67,8 @@ npm run dev
 
 ## Tooling
 
-- **Local development:** Bun preferred
-- **CI:** Node + npm for reliability
+- **Local development:** Bun preferred (`bun.lock` is canonical locally)
+- **CI:** Node + npm for reliability (`package-lock.json` kept for CI)
 
 ## Content strategy
 

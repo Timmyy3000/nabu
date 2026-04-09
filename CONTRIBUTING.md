@@ -40,6 +40,14 @@ bun install
 bun run dev
 ```
 
+Recommended local checks with Bun:
+
+```bash
+bun run lint
+bun run test:bun
+bun run build
+```
+
 ### Alternative
 
 If Bun is unavailable, npm also works:
@@ -61,7 +69,7 @@ npm run build
 
 ## CI
 
-CI currently uses Node + npm for maximum compatibility and reliability.
+CI currently uses Node + npm for maximum compatibility and reliability, while local development prefers Bun.
 
 ## Commit style
 
