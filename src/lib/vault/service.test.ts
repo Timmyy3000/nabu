@@ -1,0 +1,92 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { __resetVaultServiceForTests, getNoteBySlug, getVaultIndex, rebuildVaultIndex } from './service'
+
+const ORIGINAL_KNOWLEDGE_PATH = process.env.KNOWLEDGE_PATH
+const tempRoots: string[] = []
+
+async function createVaultFixture(files: Record<string, string>) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nabu-vault-service-'))
+  tempRoots.push(root)
+
+  await Promise.all(
+    Object.entries(files).map(async ([relPath, content]) => {
+      const absPath = path.join(root, relPath)
+      await mkdir(path.dirname(absPath), { recursive: true })
+      await writeFile(absPath, content)
+    }),
+  )
+
+  process.env.KNOWLEDGE_PATH = root
+  __resetVaultServiceForTests()
+
+  return root
+}
+
+afterEach(async () => {
+  process.env.KNOWLEDGE_PATH = ORIGINAL_KNOWLEDGE_PATH
+  __resetVaultServiceForTests()
+
+  await Promise.allSettled(tempRoots.map(async (root) => rm(root, { recursive: true, force: true })))
+  tempRoots.length = 0
+})
+
+describe('vault service', () => {
+  it('loads the index lazily and returns the same cached object until rebuilt', async () => {
+    await createVaultFixture({
+      'ideas/first.md': '# First',
+      'ideas/second.md': '# Second',
+    })
+
+    const first = await getVaultIndex()
+    const second = await getVaultIndex()
+
+    expect(first).toBe(second)
+    expect(first.stats.noteCount).toBe(2)
+  })
+
+  it('rebuilds the index and refreshes cache contents', async () => {
+    const root = await createVaultFixture({
+      'ideas/first.md': '# First',
+    })
+
+    const first = await getVaultIndex()
+    await writeFile(path.join(root, 'ideas', 'second.md'), '# Second')
+
+    const rebuilt = await rebuildVaultIndex()
+    const cached = await getVaultIndex()
+
+    expect(rebuilt).toBe(cached)
+    expect(rebuilt).not.toBe(first)
+    expect(rebuilt.stats.noteCount).toBe(2)
+  })
+
+  it('returns deterministic note-by-slug winner and collision relPaths', async () => {
+    await createVaultFixture({
+      'ideas/a.md': '---\nslug: shared\n---\n# A',
+      'ideas/z.md': '---\nslug: shared\n---\n# Z',
+      'ideas/unique.md': '# Unique',
+    })
+
+    const shared = await getNoteBySlug('shared')
+    const unique = await getNoteBySlug('unique')
+
+    expect(shared).toMatchObject({
+      note: {
+        relPath: 'ideas/a.md',
+        slug: 'shared',
+      },
+      collisions: ['ideas/a.md', 'ideas/z.md'],
+    })
+
+    expect(unique).toMatchObject({
+      note: {
+        relPath: 'ideas/unique.md',
+        slug: 'unique',
+      },
+      collisions: [],
+    })
+  })
+})
