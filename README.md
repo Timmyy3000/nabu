@@ -63,11 +63,19 @@ KNOWLEDGE_PATH=/data/nabu
 
 Repo-safe demo content can live in `examples/`.
 
+## Engineering conventions
+
+- Red-green-refactor TDD by default
+- Aim for full test coverage on production code
+- Write detailed plans before major features
+- Store working plans in an uncommitted `scratchpad/` folder
+
 ## First milestones
 
 - [x] Initialize frontend app shell
 - [x] Establish open-source repo structure
 - [x] Add documentation for architecture and content model
+- [ ] Add testing and CI foundations
 - [ ] Build backend note indexer
 - [ ] Render markdown notes from disk
 - [ ] Add tags, backlinks, and graph traversal
