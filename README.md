@@ -48,10 +48,24 @@ nabu/
 
 ## Local development
 
+Preferred local package manager: **Bun**
+
+```bash
+bun install
+bun run dev
+```
+
+If Bun is not available, npm also works:
+
 ```bash
 npm install
 npm run dev
 ```
+
+## Tooling
+
+- **Local development:** Bun preferred
+- **CI:** Node + npm for reliability
 
 ## Content strategy
 
