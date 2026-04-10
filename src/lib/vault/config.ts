@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { mkdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { VaultConfigError } from './errors'
 
@@ -14,12 +14,19 @@ export async function getVaultConfig(): Promise<VaultConfig> {
   }
 
   const rootPath = path.resolve(process.cwd(), configuredPath)
-  const rootStat = await stat(rootPath).catch(() => {
-    throw new VaultConfigError(`KNOWLEDGE_PATH does not exist: ${rootPath}`)
-  })
 
-  if (!rootStat.isDirectory()) {
-    throw new VaultConfigError('KNOWLEDGE_PATH must point to a directory.')
+  try {
+    const rootStat = await stat(rootPath)
+
+    if (!rootStat.isDirectory()) {
+      throw new VaultConfigError('KNOWLEDGE_PATH must point to a directory.')
+    }
+  } catch (error) {
+    if (error instanceof VaultConfigError) {
+      throw error
+    }
+
+    await mkdir(rootPath, { recursive: true })
   }
 
   return {
