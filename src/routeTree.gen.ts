@@ -9,13 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LogoutRouteImport } from './routes/logout'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
 import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
 import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
+import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiVaultNotesSlugRouteImport } from './routes/api/vault/notes/$slug'
 import { Route as ApiVaultIndexStatsRouteImport } from './routes/api/vault/index/stats'
 
+const LogoutRoute = LogoutRouteImport.update({
+  id: '/logout',
+  path: '/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -36,6 +49,11 @@ const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
   path: '/api/vault/folders',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiVaultNotesSlugRoute = ApiVaultNotesSlugRouteImport.update({
   id: '/api/vault/notes/$slug',
   path: '/api/vault/notes/$slug',
@@ -49,6 +67,9 @@ const ApiVaultIndexStatsRoute = ApiVaultIndexStatsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault/': typeof ApiVaultIndexRoute
@@ -57,6 +78,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault': typeof ApiVaultIndexRoute
@@ -66,6 +90,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault/': typeof ApiVaultIndexRoute
@@ -76,6 +103,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/login'
+    | '/logout'
+    | '/api/auth/login'
     | '/api/vault/folders'
     | '/api/vault/tree'
     | '/api/vault/'
@@ -84,6 +114,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/login'
+    | '/logout'
+    | '/api/auth/login'
     | '/api/vault/folders'
     | '/api/vault/tree'
     | '/api/vault'
@@ -92,6 +125,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/login'
+    | '/logout'
+    | '/api/auth/login'
     | '/api/vault/folders'
     | '/api/vault/tree'
     | '/api/vault/'
@@ -101,6 +137,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
+  LogoutRoute: typeof LogoutRoute
+  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiVaultFoldersRoute: typeof ApiVaultFoldersRoute
   ApiVaultTreeRoute: typeof ApiVaultTreeRoute
   ApiVaultIndexRoute: typeof ApiVaultIndexRoute
@@ -110,6 +149,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/logout': {
+      id: '/logout'
+      path: '/logout'
+      fullPath: '/logout'
+      preLoaderRoute: typeof LogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -138,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVaultFoldersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/vault/notes/$slug': {
       id: '/api/vault/notes/$slug'
       path: '/api/vault/notes/$slug'
@@ -157,6 +217,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
+  LogoutRoute: LogoutRoute,
+  ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiVaultFoldersRoute: ApiVaultFoldersRoute,
   ApiVaultTreeRoute: ApiVaultTreeRoute,
   ApiVaultIndexRoute: ApiVaultIndexRoute,

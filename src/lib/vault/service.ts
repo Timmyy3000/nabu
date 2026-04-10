@@ -49,6 +49,13 @@ type VaultFolderListing = {
   notes: VaultIndexSummaryNote[]
 }
 
+type VaultBrowseData = {
+  tree: VaultFolderTreeNode
+  folder: VaultFolderListing
+  selectedNoteSlug: string | null
+  note: VaultNotePayload | null
+}
+
 let cachedIndex: LoadedVaultIndex | null = null
 let inFlightBuild: Promise<LoadedVaultIndex> | null = null
 
@@ -152,6 +159,15 @@ function createFolderName(folderPath: string): string {
 
   const parts = folderPath.split('/')
   return parts[parts.length - 1] ?? folderPath
+}
+
+function getParentFolderPath(relPath: string): string {
+  const parent = path.posix.dirname(relPath)
+  return parent === '.' ? '' : parent
+}
+
+function isNoteInFolder(relPath: string, folderPath: string): boolean {
+  return getParentFolderPath(relPath) === folderPath
 }
 
 function createFolderMaps(index: LoadedVaultIndex): {
@@ -284,6 +300,58 @@ export async function getFolderListing(folderPathInput: string): Promise<VaultFo
   return buildFolderListing(folderPath, folderChildren, folderNotes)
 }
 
+export async function getVaultBrowseData(input: {
+  folderPath: string | null | undefined
+  noteSlug: string | null | undefined
+}): Promise<VaultBrowseData> {
+  const tree = await getVaultTree()
+
+  let folderListing: VaultFolderListing | null = null
+
+  try {
+    folderListing = await getFolderListing(input.folderPath ?? '')
+  } catch {
+    folderListing = null
+  }
+
+  if (!folderListing) {
+    const rootListing = await getFolderListing('')
+    if (!rootListing) {
+      throw new Error('Vault root listing unavailable')
+    }
+
+    folderListing = rootListing
+  }
+
+  const requestedSlug = normalizeSlugInput(input.noteSlug ?? '')
+  let selectedNoteSlug: string | null = null
+  let selectedNote: VaultNotePayload | null = null
+
+  if (requestedSlug) {
+    const requestedNote = await getNoteBySlug(requestedSlug)
+    if (requestedNote && isNoteInFolder(requestedNote.note.relPath, folderListing.path)) {
+      selectedNoteSlug = requestedSlug
+      selectedNote = requestedNote.note
+    }
+  }
+
+  if (!selectedNote) {
+    const fallback = folderListing.notes[0]
+    if (fallback) {
+      const fallbackNote = await getNoteBySlug(fallback.slug)
+      selectedNoteSlug = fallback.slug
+      selectedNote = fallbackNote?.note ?? null
+    }
+  }
+
+  return {
+    tree,
+    folder: folderListing,
+    selectedNoteSlug,
+    note: selectedNote,
+  }
+}
+
 export async function getVaultIndexResponse(): Promise<Response> {
   const index = await getVaultIndex()
 
@@ -375,6 +443,7 @@ export function __resetVaultServiceForTests() {
 export type {
   LoadedVaultIndex,
   VaultFolderListing,
+  VaultBrowseData,
   VaultIndexStats,
   VaultIndexSummaryNote,
   VaultNotePayload,
