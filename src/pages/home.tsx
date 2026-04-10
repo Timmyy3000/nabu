@@ -1,64 +1,71 @@
-const principles = [
-  'Markdown files are the source of truth.',
-  'Humans and agents share the same knowledge space.',
-  'Private content lives outside the app repository.',
-  'The web UI is a lens over the filesystem, not a replacement for it.',
-]
+import { Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { VaultBrowseData, VaultFolderTreeNode } from '../lib/vault/service'
 
-const plannedFeatures = [
-  'Filesystem-backed note browsing',
-  'Frontmatter tags and typed metadata',
-  'Backlinks and graph traversal',
-  'Password-protected deployment on Dokploy',
-  'Agent-friendly APIs for traversal and retrieval',
-]
+export function HomePage({ browse }: { browse: VaultBrowseData }) {
+  const folderTitle = browse.folder.path || 'Root'
 
-export function HomePage() {
+  function renderTreeNode(node: VaultFolderTreeNode): ReactNode {
+    return (
+      <li key={node.path || 'root'}>
+        <Link
+          to="/"
+          search={(prev) => ({ ...prev, folder: node.path, note: '' })}
+          className={node.path === browse.folder.path ? 'is-active' : undefined}
+        >
+          {node.name || 'Root'} <span className="muted">({node.noteCount})</span>
+        </Link>
+        {node.children.length > 0 ? <ul>{node.children.map((child) => renderTreeNode(child))}</ul> : null}
+      </li>
+    )
+  }
+
   return (
-    <div className="stack-lg">
-      <section className="hero-card">
-        <p className="eyebrow">Open source from day one</p>
-        <h2>Nabu is Obsidian-on-the-web for humans and agents.</h2>
-        <p className="lede">
-          It reads a markdown knowledge bank from disk, renders it in a clean web UI,
-          and leaves the files portable, inspectable, and AI-readable.
-        </p>
+    <div className="vault-layout">
+      <aside className="vault-sidebar panel">
+        <p className="eyebrow">Nabu</p>
+        <h1>Knowledge Vault</h1>
+        <ul className="tree-list">{renderTreeNode(browse.tree)}</ul>
+      </aside>
+
+      <section className="vault-list panel">
+        <h2>{folderTitle}</h2>
+        <p className="muted">{browse.folder.notes.length} notes</p>
+        <ul className="note-list">
+          {browse.folder.notes.map((note) => (
+            <li key={note.id}>
+              <Link
+                to="/"
+                search={(prev) => ({
+                  ...prev,
+                  folder: browse.folder.path,
+                  note: note.slug,
+                })}
+                className={note.slug === browse.selectedNoteSlug ? 'is-active' : undefined}
+              >
+                {note.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <section className="grid-two">
-        <article className="panel">
-          <h3>Core principles</h3>
-          <ul>
-            {principles.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </article>
-
-        <article className="panel">
-          <h3>Planned v1</h3>
-          <ul>
-            {plannedFeatures.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </article>
-      </section>
-
-      <section className="panel">
-        <h3>Content model</h3>
-        <p>
-          Nabu will treat the filesystem as the canonical knowledge layer. Folders express
-          categories, markdown files hold note bodies, and frontmatter captures tags and metadata.
-        </p>
-        <pre className="code-block">{`knowledge/
-  ideas/
-    ai/
-      agent-memory.md
-  projects/
-    nabu/
-      roadmap.md`}</pre>
-      </section>
+      <article className="vault-note panel">
+        {browse.note ? (
+          <>
+            <h2>{browse.note.title}</h2>
+            <p className="muted">{browse.note.relPath}</p>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{browse.note.body}</ReactMarkdown>
+          </>
+        ) : (
+          <>
+            <h2>No note selected</h2>
+            <p className="muted">Select a note from the list to start browsing.</p>
+          </>
+        )}
+      </article>
     </div>
   )
 }

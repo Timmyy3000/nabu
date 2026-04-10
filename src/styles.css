@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #09090b;
-  color: #f4f4f5;
+  color-scheme: light;
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f6f6f4;
+  color: #1f1f1b;
 }
 
 * {
@@ -16,8 +16,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(59, 130, 246, 0.15), transparent 30%),
-    #09090b;
+    radial-gradient(circle at top left, rgba(194, 181, 155, 0.3), transparent 30%),
+    #f6f6f4;
 }
 
 a {
@@ -37,110 +37,89 @@ select {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 320px 1fr;
   min-height: 100vh;
-}
-
-.sidebar {
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  background: rgba(9, 9, 11, 0.85);
-  backdrop-filter: blur(12px);
-}
-
-.content {
-  padding: 2rem;
+  padding: 1rem;
 }
 
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-size: 0.75rem;
-  color: #a1a1aa;
+  color: #6c6b63;
   margin: 0 0 0.75rem;
 }
 
-.sidebar h1,
-.hero-card h2,
-.panel h3 {
+.panel h1,
+.panel h2 {
   margin: 0;
 }
 
 .muted {
-  color: #a1a1aa;
+  color: #6c6b63;
 }
 
-.nav-links {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.nav-link {
-  padding: 0.75rem 0.9rem;
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: #e4e4e7;
-}
-
-.stack-lg {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.hero-card,
 .panel {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1.25rem;
-  padding: 1.5rem;
-  background: rgba(24, 24, 27, 0.7);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
-.lede {
-  color: #d4d4d8;
-  font-size: 1.05rem;
-  line-height: 1.6;
-}
-
-.grid-two {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
-}
-
-.panel ul {
-  margin: 1rem 0 0;
-  padding-left: 1.25rem;
-  color: #d4d4d8;
-  line-height: 1.7;
-}
-
-.code-block {
-  margin: 1rem 0 0;
+  border: 1px solid #d8d6ce;
+  border-radius: 0.75rem;
   padding: 1rem;
-  border-radius: 1rem;
-  background: #0a0a0a;
+  background: #faf9f5;
+}
+
+.vault-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(220px, 280px) 1fr;
+  gap: 1rem;
+  min-height: calc(100vh - 2rem);
+}
+
+.vault-sidebar,
+.vault-list,
+.vault-note {
+  overflow: auto;
+}
+
+.tree-list,
+.tree-list ul,
+.note-list {
+  margin: 0;
+  padding-left: 1rem;
+  list-style: none;
+}
+
+.tree-list li,
+.note-list li {
+  margin: 0.25rem 0;
+}
+
+.tree-list a,
+.note-list a {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.4rem;
+}
+
+.tree-list a.is-active,
+.note-list a.is-active {
+  background: #e0ddd1;
+}
+
+.vault-note h2 {
+  margin-bottom: 0.2rem;
+}
+
+.vault-note p {
+  margin-top: 0;
+}
+
+.vault-note pre {
+  background: #f0eee6;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
   overflow-x: auto;
-  color: #d4d4d8;
 }
 
 @media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .grid-two {
+  .vault-layout {
     grid-template-columns: 1fr;
   }
 }
