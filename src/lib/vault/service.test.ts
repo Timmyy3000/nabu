@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   __resetVaultServiceForTests,
+  getVaultBrowseData,
   getFolderListing,
   getNoteBySlug,
   getVaultIndex,
@@ -184,5 +185,42 @@ describe('vault service', () => {
       folders: [],
       notes: [{ relPath: 'ideas/ai/agent-memory.md' }],
     })
+  })
+
+  it('builds deterministic browse data from folder and note inputs', async () => {
+    await createVaultFixture({
+      'inbox.md': '# Inbox',
+      'ideas/alpha.md': '# Alpha',
+      'ideas/zeta.md': '# Zeta',
+      'ideas/ai/agent-memory.md': '# Agent Memory',
+    })
+
+    const explicit = await getVaultBrowseData({
+      folderPath: 'ideas',
+      noteSlug: 'zeta',
+    })
+
+    expect(explicit.folder.path).toBe('ideas')
+    expect(explicit.folder.notes.map((note) => note.slug)).toEqual(['alpha', 'zeta'])
+    expect(explicit.selectedNoteSlug).toBe('zeta')
+    expect(explicit.note?.relPath).toBe('ideas/zeta.md')
+
+    const invalidFolder = await getVaultBrowseData({
+      folderPath: '../secrets',
+      noteSlug: '',
+    })
+
+    expect(invalidFolder.folder.path).toBe('')
+    expect(invalidFolder.selectedNoteSlug).toBe('inbox')
+    expect(invalidFolder.note?.relPath).toBe('inbox.md')
+
+    const mismatchedNote = await getVaultBrowseData({
+      folderPath: 'ideas',
+      noteSlug: 'inbox',
+    })
+
+    expect(mismatchedNote.folder.path).toBe('ideas')
+    expect(mismatchedNote.selectedNoteSlug).toBe('alpha')
+    expect(mismatchedNote.note?.relPath).toBe('ideas/alpha.md')
   })
 })
