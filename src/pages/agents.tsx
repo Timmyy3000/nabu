@@ -29,6 +29,9 @@ export function AgentsPage() {
         <li>
           <code>GET /api/vault/notes/$slug</code>: note lookup by slug (`note`, `collisions`, `builtAt`).
         </li>
+        <li>
+          <code>GET /api/vault/search?q=&amp;path=&amp;limit=&amp;offset=</code>: lexical search over note metadata and body.
+        </li>
       </ul>
 
       <h2>Current Human Navigation Surface</h2>

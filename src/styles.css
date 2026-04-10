@@ -86,6 +86,43 @@ select {
   list-style: none;
 }
 
+.search-form {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.search-form input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #bcb8ab;
+  border-radius: 0.35rem;
+  background: #fffdf8;
+}
+
+.search-form label {
+  font-size: 0.85rem;
+  color: #4f4d45;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.search-actions button {
+  width: fit-content;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #7f7a69;
+  border-radius: 0.35rem;
+  background: #e6e2d6;
+  cursor: pointer;
+}
+
+.search-results li p {
+  margin: 0.2rem 0;
+}
+
 .tree-list li,
 .note-list li {
   margin: 0.25rem 0;

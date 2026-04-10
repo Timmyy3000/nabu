@@ -8,6 +8,7 @@ import {
   getVaultIndexResponse,
   getVaultIndexStatsResponse,
   getVaultNoteBySlugResponse,
+  getVaultSearchResponse,
   getVaultTreeResponse,
 } from './service'
 
@@ -262,6 +263,89 @@ describe('vault retrieval contracts', () => {
     expect(missingPayload).toEqual({
       error: 'Folder not found',
       folder: 'ideas/unknown',
+    })
+  })
+
+  it('returns lexical search payload with normalized query and pagination metadata', async () => {
+    await createVaultFixture({
+      'ideas/agent-memory.md': '---\ntitle: Agent Memory\nsummary: Shared context for agents\n---\nBody',
+      'ideas/agent-runtime.md': '---\ntitle: Agent Runtime\nsummary: Runtime details\n---\nBody',
+    })
+
+    const response = await getVaultSearchResponse({
+      query: 'agent',
+      path: '',
+      limit: '1',
+      offset: '0',
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      builtAt: expect.any(String),
+      query: 'agent',
+      normalizedQuery: 'agent',
+      path: '',
+      limit: 1,
+      offset: 0,
+      total: 2,
+      hasMore: true,
+      results: [
+        {
+          id: expect.any(String),
+          relPath: expect.any(String),
+          slug: expect.any(String),
+          title: expect.any(String),
+          summary: expect.anything(),
+          tags: expect.any(Array),
+          score: expect.any(Number),
+          reasons: expect.any(Array),
+          snippet: expect.any(String),
+        },
+      ],
+    })
+  })
+
+  it('returns 400 for empty search query', async () => {
+    await createVaultFixture({
+      'ideas/agent-memory.md': '# Agent Memory',
+    })
+
+    const response = await getVaultSearchResponse({
+      query: '   ',
+      path: '',
+      limit: null,
+      offset: null,
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(payload).toEqual({
+      error: 'Search query is required',
+    })
+  })
+
+  it('returns 200 with empty results for unknown search path scope', async () => {
+    await createVaultFixture({
+      'ideas/agent-memory.md': '# Agent Memory',
+    })
+
+    const response = await getVaultSearchResponse({
+      query: 'agent',
+      path: 'projects',
+      limit: null,
+      offset: null,
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      query: 'agent',
+      normalizedQuery: 'agent',
+      path: 'projects',
+      total: 0,
+      hasMore: false,
+      results: [],
     })
   })
 })

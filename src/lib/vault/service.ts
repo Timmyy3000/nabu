@@ -5,6 +5,13 @@ import { getVaultConfig } from './config'
 import { listMarkdownFiles } from './filesystem'
 import { buildVaultIndex } from './index'
 import { parseNote, type ParsedVaultNote } from './parse-note'
+import {
+  normalizeSearchLimit,
+  normalizeSearchOffset,
+  normalizeSearchQuery,
+  searchVaultIndex,
+  type VaultSearchResponse,
+} from './search'
 import type { VaultFolderListItem, VaultFolderTreeNode, VaultIndex, VaultIndexStats } from './types'
 
 type LoadedVaultIndex = VaultIndex & {
@@ -54,6 +61,13 @@ type VaultBrowseData = {
   folder: VaultFolderListing
   selectedNoteSlug: string | null
   note: VaultNotePayload | null
+}
+
+type VaultSearchInput = {
+  query: string
+  path?: string | null
+  limit?: number | null
+  offset?: number | null
 }
 
 let cachedIndex: LoadedVaultIndex | null = null
@@ -352,6 +366,88 @@ export async function getVaultBrowseData(input: {
   }
 }
 
+function normalizeSearchPath(pathInput: string | null | undefined): string {
+  if (pathInput == null) {
+    return ''
+  }
+
+  const trimmed = pathInput.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSearchResponse> {
+  const queryData = normalizeSearchQuery(input.query)
+
+  if (!queryData.normalizedQuery) {
+    throw new Error('Search query is required')
+  }
+
+  const normalizedPath = normalizeSearchPath(input.path)
+  const limit = normalizeSearchLimit(input.limit)
+  const offset = normalizeSearchOffset(input.offset)
+  const index = await getVaultIndex()
+
+  return searchVaultIndex({
+    notes: index.notes,
+    query: queryData.query,
+    path: normalizedPath,
+    limit,
+    offset,
+  })
+}
+
+export async function getVaultSearchResponse(input: {
+  query: string | null | undefined
+  path: string | null | undefined
+  limit: string | null | undefined
+  offset: string | null | undefined
+}): Promise<Response> {
+  const rawQuery = input.query ?? ''
+  const normalizedQuery = normalizeSearchQuery(rawQuery).normalizedQuery
+
+  if (!normalizedQuery) {
+    return Response.json(
+      {
+        error: 'Search query is required',
+      },
+      { status: 400 },
+    )
+  }
+
+  let normalizedPath = ''
+  try {
+    normalizedPath = normalizeSearchPath(input.path)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid folder path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const parsedLimit = Number.parseInt(input.limit ?? '', 10)
+  const parsedOffset = Number.parseInt(input.offset ?? '', 10)
+
+  const result = await searchVaultNotes({
+    query: rawQuery,
+    path: normalizedPath,
+    limit: Number.isNaN(parsedLimit) ? null : parsedLimit,
+    offset: Number.isNaN(parsedOffset) ? null : parsedOffset,
+  })
+  const index = await getVaultIndex()
+
+  return Response.json({
+    builtAt: index.builtAt,
+    ...result,
+  })
+}
+
 export async function getVaultIndexResponse(): Promise<Response> {
   const index = await getVaultIndex()
 
@@ -447,5 +543,6 @@ export type {
   VaultIndexStats,
   VaultIndexSummaryNote,
   VaultNotePayload,
+  VaultSearchResponse,
   VaultSlugLookup,
 }

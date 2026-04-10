@@ -2,10 +2,28 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { VaultBrowseData, VaultFolderTreeNode } from '../lib/vault/service'
+import type { VaultBrowseData, VaultFolderTreeNode, VaultSearchResponse } from '../lib/vault/service'
 
-export function HomePage({ browse }: { browse: VaultBrowseData }) {
+function getParentFolderPath(relPath: string): string {
+  const parts = relPath.split('/')
+  if (parts.length <= 1) {
+    return ''
+  }
+
+  return parts.slice(0, -1).join('/')
+}
+
+export function HomePage({
+  browse,
+  search,
+  searchPathInput,
+}: {
+  browse: VaultBrowseData
+  search: VaultSearchResponse | null
+  searchPathInput: string
+}) {
   const folderTitle = browse.folder.path || 'Root'
+  const searchActive = search?.normalizedQuery ? true : false
 
   function renderTreeNode(node: VaultFolderTreeNode): ReactNode {
     return (
@@ -32,29 +50,88 @@ export function HomePage({ browse }: { browse: VaultBrowseData }) {
           </a>
         </p>
         <h1>Knowledge Vault</h1>
-        <ul className="tree-list">{renderTreeNode(browse.tree)}</ul>
-      </aside>
-
-      <section className="vault-list panel">
-        <h2>{folderTitle}</h2>
-        <p className="muted">{browse.folder.notes.length} notes</p>
-        <ul className="note-list">
-          {browse.folder.notes.map((note) => (
-            <li key={note.id}>
+        <form method="get" action="/" className="search-form">
+          <label htmlFor="vault-search-input">Search notes</label>
+          <input id="vault-search-input" name="q" defaultValue={search?.query ?? ''} placeholder="Search vault..." />
+          <label htmlFor="vault-search-path">Scope path (optional)</label>
+          <input
+            id="vault-search-path"
+            name="searchPath"
+            defaultValue={searchPathInput}
+            placeholder={browse.folder.path || 'whole vault'}
+          />
+          <input type="hidden" name="folder" value={browse.folder.path} />
+          <input type="hidden" name="note" value={browse.selectedNoteSlug ?? ''} />
+          <div className="search-actions">
+            <button type="submit">Search</button>
+            {searchActive ? (
               <Link
                 to="/"
                 search={(prev) => ({
                   ...prev,
-                  folder: browse.folder.path,
-                  note: note.slug,
+                  q: '',
+                  searchPath: '',
                 })}
-                className={note.slug === browse.selectedNoteSlug ? 'is-active' : undefined}
               >
-                {note.title}
+                Clear
               </Link>
-            </li>
-          ))}
-        </ul>
+            ) : null}
+          </div>
+        </form>
+        <ul className="tree-list">{renderTreeNode(browse.tree)}</ul>
+      </aside>
+
+      <section className="vault-list panel">
+        {searchActive && search ? (
+          <>
+            <h2>Search</h2>
+            <p className="muted">
+              {search.total} result{search.total === 1 ? '' : 's'}
+              {search.path ? ` in ${search.path}` : ''}
+            </p>
+            <ul className="note-list search-results">
+              {search.results.map((result) => (
+                <li key={result.id}>
+                  <Link
+                    to="/"
+                    search={(prev) => ({
+                      ...prev,
+                      folder: getParentFolderPath(result.relPath),
+                      note: result.slug,
+                    })}
+                  >
+                    {result.title}
+                  </Link>
+                  <p className="muted">{result.relPath}</p>
+                  <p>{result.snippet}</p>
+                  <p className="muted">{result.reasons.join(', ')}</p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <>
+            <h2>{folderTitle}</h2>
+            <p className="muted">{browse.folder.notes.length} notes</p>
+            <ul className="note-list">
+              {browse.folder.notes.map((note) => (
+                <li key={note.id}>
+                  <Link
+                    to="/"
+                    search={(prev) => ({
+                      ...prev,
+                      folder: browse.folder.path,
+                      note: note.slug,
+                    })}
+                    className={note.slug === browse.selectedNoteSlug ? 'is-active' : undefined}
+                  >
+                    {note.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
 
       <article className="vault-note panel">
