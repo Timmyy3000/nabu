@@ -5,6 +5,6 @@
     "node": "22"
   },
   "deploy": {
-    "startCommand": "node dist/server/server.js"
+    "startCommand": "node .output/server/index.mjs"
   }
 }
