@@ -4,9 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   __resetVaultServiceForTests,
+  getVaultFolderListingResponse,
   getVaultIndexResponse,
   getVaultIndexStatsResponse,
   getVaultNoteBySlugResponse,
+  getVaultTreeResponse,
 } from './service'
 
 const ORIGINAL_KNOWLEDGE_PATH = process.env.KNOWLEDGE_PATH
@@ -127,6 +129,139 @@ describe('vault retrieval contracts', () => {
     expect(missingPayload).toEqual({
       error: 'Note not found',
       slug: 'missing',
+    })
+  })
+
+  it('returns folder tree payload with deterministic ordering and no absolute paths', async () => {
+    const root = await createVaultFixture({
+      'inbox.md': '# Inbox',
+      'ideas/notes.md': '# Notes',
+      'ideas/ai/agent-memory.md': '# Agent Memory',
+      'projects/nabu/roadmap.md': '# Roadmap',
+      'projects/zeta.md': '# Zeta',
+    })
+
+    const response = await getVaultTreeResponse()
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toEqual({
+      builtAt: expect.any(String),
+      tree: {
+        path: '',
+        name: '',
+        directNoteCount: 1,
+        noteCount: 5,
+        children: [
+          {
+            path: 'ideas',
+            name: 'ideas',
+            directNoteCount: 1,
+            noteCount: 2,
+            children: [
+              {
+                path: 'ideas/ai',
+                name: 'ai',
+                directNoteCount: 1,
+                noteCount: 1,
+                children: [],
+              },
+            ],
+          },
+          {
+            path: 'projects',
+            name: 'projects',
+            directNoteCount: 1,
+            noteCount: 2,
+            children: [
+              {
+                path: 'projects/nabu',
+                name: 'nabu',
+                directNoteCount: 1,
+                noteCount: 1,
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    const serialized = JSON.stringify(payload)
+    expect(serialized).not.toContain('absPath')
+    expect(serialized).not.toContain(root)
+  })
+
+  it('returns folder listing payload for root and nested folders', async () => {
+    await createVaultFixture({
+      'inbox.md': '# Inbox',
+      'ideas/alpha.md': '# Alpha',
+      'ideas/zeta.md': '# Zeta',
+      'ideas/ai/agent-memory.md': '# Agent Memory',
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const rootResponse = await getVaultFolderListingResponse(null)
+    const rootPayload = await rootResponse.json()
+
+    expect(rootResponse.status).toBe(200)
+    expect(rootPayload).toMatchObject({
+      builtAt: expect.any(String),
+      folder: {
+        path: '',
+        folders: [
+          {
+            path: 'ideas',
+            name: 'ideas',
+            directNoteCount: 2,
+            noteCount: 3,
+          },
+          {
+            path: 'projects',
+            name: 'projects',
+            directNoteCount: 0,
+            noteCount: 1,
+          },
+        ],
+        notes: [{ relPath: 'inbox.md', slug: 'inbox' }],
+      },
+    })
+
+    const ideasResponse = await getVaultFolderListingResponse('ideas')
+    const ideasPayload = await ideasResponse.json()
+
+    expect(ideasResponse.status).toBe(200)
+    expect(ideasPayload).toMatchObject({
+      builtAt: expect.any(String),
+      folder: {
+        path: 'ideas',
+        name: 'ideas',
+        folders: [{ path: 'ideas/ai', name: 'ai' }],
+        notes: [{ relPath: 'ideas/alpha.md' }, { relPath: 'ideas/zeta.md' }],
+      },
+    })
+  })
+
+  it('returns 400 for invalid folder path and 404 for unknown folder path', async () => {
+    await createVaultFixture({
+      'ideas/note.md': '# Note',
+    })
+
+    const invalid = await getVaultFolderListingResponse('../secrets')
+    const invalidPayload = await invalid.json()
+    const missing = await getVaultFolderListingResponse('ideas/unknown')
+    const missingPayload = await missing.json()
+
+    expect(invalid.status).toBe(400)
+    expect(invalidPayload).toEqual({
+      error: 'Invalid folder path',
+      folder: '../secrets',
+    })
+
+    expect(missing.status).toBe(404)
+    expect(missingPayload).toEqual({
+      error: 'Folder not found',
+      folder: 'ideas/unknown',
     })
   })
 })

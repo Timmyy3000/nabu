@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { normalizeVaultPath } from '../paths'
 import { getVaultConfig } from './config'
 import { listMarkdownFiles } from './filesystem'
 import { buildVaultIndex } from './index'
 import { parseNote, type ParsedVaultNote } from './parse-note'
-import type { VaultIndex, VaultIndexStats } from './types'
+import type { VaultFolderListItem, VaultFolderTreeNode, VaultIndex, VaultIndexStats } from './types'
 
 type LoadedVaultIndex = VaultIndex & {
   builtAt: string
@@ -39,6 +40,13 @@ type VaultSlugLookup = {
   builtAt: string
   collisions: string[]
   note: VaultNotePayload
+}
+
+type VaultFolderListing = {
+  path: string
+  name: string
+  folders: VaultFolderListItem[]
+  notes: VaultIndexSummaryNote[]
 }
 
 let cachedIndex: LoadedVaultIndex | null = null
@@ -124,6 +132,111 @@ function toVaultNotePayload(note: ParsedVaultNote): VaultNotePayload {
   }
 }
 
+function normalizeFolderPathInput(folderPath: string | null | undefined): string {
+  if (folderPath == null) {
+    return ''
+  }
+
+  const trimmed = folderPath.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+function createFolderName(folderPath: string): string {
+  if (!folderPath) {
+    return ''
+  }
+
+  const parts = folderPath.split('/')
+  return parts[parts.length - 1] ?? folderPath
+}
+
+function createFolderMaps(index: LoadedVaultIndex): {
+  folderChildren: Map<string, string[]>
+  folderNotes: Map<string, ParsedVaultNote[]>
+} {
+  const folderChildren = new Map<string, string[]>()
+  const folderNotes = new Map<string, ParsedVaultNote[]>()
+
+  folderChildren.set('', [])
+  folderNotes.set('', [])
+
+  for (const folderPath of index.folders) {
+    folderChildren.set(folderPath, [])
+    folderNotes.set(folderPath, [])
+  }
+
+  for (const folderPath of index.folders) {
+    const parentPath = path.posix.dirname(folderPath)
+    const parentKey = parentPath === '.' ? '' : parentPath
+    const siblings = folderChildren.get(parentKey)
+    if (siblings) {
+      siblings.push(folderPath)
+    } else {
+      folderChildren.set(parentKey, [folderPath])
+    }
+  }
+
+  for (const note of index.notes) {
+    const parentPath = path.posix.dirname(note.relPath)
+    const parentKey = parentPath === '.' ? '' : parentPath
+    const notes = folderNotes.get(parentKey)
+    if (notes) {
+      notes.push(note)
+    } else {
+      folderNotes.set(parentKey, [note])
+    }
+  }
+
+  return { folderChildren, folderNotes }
+}
+
+function buildFolderTreeNode(
+  folderPath: string,
+  folderChildren: Map<string, string[]>,
+  folderNotes: Map<string, ParsedVaultNote[]>,
+): VaultFolderTreeNode {
+  const children = (folderChildren.get(folderPath) ?? []).map((childPath) =>
+    buildFolderTreeNode(childPath, folderChildren, folderNotes),
+  )
+  const directNoteCount = folderNotes.get(folderPath)?.length ?? 0
+  const nestedNoteCount = children.reduce((total, child) => total + child.noteCount, 0)
+
+  return {
+    path: folderPath,
+    name: createFolderName(folderPath),
+    directNoteCount,
+    noteCount: directNoteCount + nestedNoteCount,
+    children,
+  }
+}
+
+function buildFolderListing(
+  folderPath: string,
+  folderChildren: Map<string, string[]>,
+  folderNotes: Map<string, ParsedVaultNote[]>,
+): VaultFolderListing {
+  const folders = (folderChildren.get(folderPath) ?? []).map((childPath) => {
+    const childTreeNode = buildFolderTreeNode(childPath, folderChildren, folderNotes)
+    return {
+      path: childTreeNode.path,
+      name: childTreeNode.name,
+      directNoteCount: childTreeNode.directNoteCount,
+      noteCount: childTreeNode.noteCount,
+    }
+  })
+
+  return {
+    path: folderPath,
+    name: createFolderName(folderPath),
+    folders,
+    notes: (folderNotes.get(folderPath) ?? []).map(toSummaryNote),
+  }
+}
+
 export async function getVaultIndex(): Promise<LoadedVaultIndex> {
   return loadVaultIndex(false)
 }
@@ -153,6 +266,24 @@ export async function getNoteBySlug(slug: string): Promise<VaultSlugLookup | nul
   }
 }
 
+export async function getVaultTree(): Promise<VaultFolderTreeNode> {
+  const index = await getVaultIndex()
+  const { folderChildren, folderNotes } = createFolderMaps(index)
+  return buildFolderTreeNode('', folderChildren, folderNotes)
+}
+
+export async function getFolderListing(folderPathInput: string): Promise<VaultFolderListing | null> {
+  const folderPath = normalizeFolderPathInput(folderPathInput)
+  const index = await getVaultIndex()
+
+  if (folderPath && !index.folders.includes(folderPath)) {
+    return null
+  }
+
+  const { folderChildren, folderNotes } = createFolderMaps(index)
+  return buildFolderListing(folderPath, folderChildren, folderNotes)
+}
+
 export async function getVaultIndexResponse(): Promise<Response> {
   const index = await getVaultIndex()
 
@@ -172,6 +303,51 @@ export async function getVaultIndexStatsResponse(): Promise<Response> {
     builtAt: index.builtAt,
     stats: index.stats,
     warnings: index.warnings,
+  })
+}
+
+export async function getVaultTreeResponse(): Promise<Response> {
+  const index = await getVaultIndex()
+  const { folderChildren, folderNotes } = createFolderMaps(index)
+
+  return Response.json({
+    builtAt: index.builtAt,
+    tree: buildFolderTreeNode('', folderChildren, folderNotes),
+  })
+}
+
+export async function getVaultFolderListingResponse(folderPath: string | null | undefined): Promise<Response> {
+  let normalizedPath: string
+
+  try {
+    normalizedPath = normalizeFolderPathInput(folderPath)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid folder path',
+        folder: folderPath ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const index = await getVaultIndex()
+
+  if (normalizedPath && !index.folders.includes(normalizedPath)) {
+    return Response.json(
+      {
+        error: 'Folder not found',
+        folder: normalizedPath,
+      },
+      { status: 404 },
+    )
+  }
+
+  const { folderChildren, folderNotes } = createFolderMaps(index)
+
+  return Response.json({
+    builtAt: index.builtAt,
+    folder: buildFolderListing(normalizedPath, folderChildren, folderNotes),
   })
 }
 
@@ -196,4 +372,11 @@ export function __resetVaultServiceForTests() {
   inFlightBuild = null
 }
 
-export type { LoadedVaultIndex, VaultIndexStats, VaultIndexSummaryNote, VaultNotePayload, VaultSlugLookup }
+export type {
+  LoadedVaultIndex,
+  VaultFolderListing,
+  VaultIndexStats,
+  VaultIndexSummaryNote,
+  VaultNotePayload,
+  VaultSlugLookup,
+}

@@ -18,3 +18,18 @@ export type VaultIndex = {
   warnings: string[]
   stats: VaultIndexStats
 }
+
+export type VaultFolderTreeNode = {
+  path: string
+  name: string
+  directNoteCount: number
+  noteCount: number
+  children: VaultFolderTreeNode[]
+}
+
+export type VaultFolderListItem = {
+  path: string
+  name: string
+  directNoteCount: number
+  noteCount: number
+}

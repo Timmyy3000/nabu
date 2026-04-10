@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
+import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
+import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
 import { Route as ApiVaultNotesSlugRouteImport } from './routes/api/vault/notes/$slug'
 import { Route as ApiVaultIndexStatsRouteImport } from './routes/api/vault/index/stats'
 
@@ -22,6 +24,16 @@ const IndexRoute = IndexRouteImport.update({
 const ApiVaultIndexRoute = ApiVaultIndexRouteImport.update({
   id: '/api/vault/',
   path: '/api/vault/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultTreeRoute = ApiVaultTreeRouteImport.update({
+  id: '/api/vault/tree',
+  path: '/api/vault/tree',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
+  id: '/api/vault/folders',
+  path: '/api/vault/folders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiVaultNotesSlugRoute = ApiVaultNotesSlugRouteImport.update({
@@ -37,12 +49,16 @@ const ApiVaultIndexStatsRoute = ApiVaultIndexStatsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault/': typeof ApiVaultIndexRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault': typeof ApiVaultIndexRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
@@ -50,6 +66,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault/': typeof ApiVaultIndexRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
@@ -58,14 +76,24 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/vault/folders'
+    | '/api/vault/tree'
     | '/api/vault/'
     | '/api/vault/index/stats'
     | '/api/vault/notes/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/vault' | '/api/vault/index/stats' | '/api/vault/notes/$slug'
+  to:
+    | '/'
+    | '/api/vault/folders'
+    | '/api/vault/tree'
+    | '/api/vault'
+    | '/api/vault/index/stats'
+    | '/api/vault/notes/$slug'
   id:
     | '__root__'
     | '/'
+    | '/api/vault/folders'
+    | '/api/vault/tree'
     | '/api/vault/'
     | '/api/vault/index/stats'
     | '/api/vault/notes/$slug'
@@ -73,6 +101,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiVaultFoldersRoute: typeof ApiVaultFoldersRoute
+  ApiVaultTreeRoute: typeof ApiVaultTreeRoute
   ApiVaultIndexRoute: typeof ApiVaultIndexRoute
   ApiVaultIndexStatsRoute: typeof ApiVaultIndexStatsRoute
   ApiVaultNotesSlugRoute: typeof ApiVaultNotesSlugRoute
@@ -94,6 +124,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVaultIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vault/tree': {
+      id: '/api/vault/tree'
+      path: '/api/vault/tree'
+      fullPath: '/api/vault/tree'
+      preLoaderRoute: typeof ApiVaultTreeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/folders': {
+      id: '/api/vault/folders'
+      path: '/api/vault/folders'
+      fullPath: '/api/vault/folders'
+      preLoaderRoute: typeof ApiVaultFoldersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/vault/notes/$slug': {
       id: '/api/vault/notes/$slug'
       path: '/api/vault/notes/$slug'
@@ -113,6 +157,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiVaultFoldersRoute: ApiVaultFoldersRoute,
+  ApiVaultTreeRoute: ApiVaultTreeRoute,
   ApiVaultIndexRoute: ApiVaultIndexRoute,
   ApiVaultIndexStatsRoute: ApiVaultIndexStatsRoute,
   ApiVaultNotesSlugRoute: ApiVaultNotesSlugRoute,

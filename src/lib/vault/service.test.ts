@@ -2,7 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { __resetVaultServiceForTests, getNoteBySlug, getVaultIndex, rebuildVaultIndex } from './service'
+import {
+  __resetVaultServiceForTests,
+  getFolderListing,
+  getNoteBySlug,
+  getVaultIndex,
+  getVaultTree,
+  rebuildVaultIndex,
+} from './service'
 
 const ORIGINAL_KNOWLEDGE_PATH = process.env.KNOWLEDGE_PATH
 const tempRoots: string[] = []
@@ -87,6 +94,95 @@ describe('vault service', () => {
         slug: 'unique',
       },
       collisions: [],
+    })
+  })
+
+  it('builds a deterministic nested folder tree for navigation', async () => {
+    await createVaultFixture({
+      'inbox.md': '# Inbox',
+      'projects/zeta.md': '# Zeta',
+      'ideas/notes.md': '# Notes',
+      'ideas/ai/agent-memory.md': '# Agent Memory',
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const tree = await getVaultTree()
+
+    expect(tree).toEqual({
+      path: '',
+      name: '',
+      directNoteCount: 1,
+      noteCount: 5,
+      children: [
+        {
+          path: 'ideas',
+          name: 'ideas',
+          directNoteCount: 1,
+          noteCount: 2,
+          children: [
+            {
+              path: 'ideas/ai',
+              name: 'ai',
+              directNoteCount: 1,
+              noteCount: 1,
+              children: [],
+            },
+          ],
+        },
+        {
+          path: 'projects',
+          name: 'projects',
+          directNoteCount: 1,
+          noteCount: 2,
+          children: [
+            {
+              path: 'projects/nabu',
+              name: 'nabu',
+              directNoteCount: 1,
+              noteCount: 1,
+              children: [],
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('returns deterministic folder listings for root and nested folders', async () => {
+    await createVaultFixture({
+      'inbox.md': '# Inbox',
+      'ideas/zeta.md': '# Zeta',
+      'ideas/alpha.md': '# Alpha',
+      'ideas/ai/agent-memory.md': '# Agent Memory',
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const root = await getFolderListing('')
+    const ideas = await getFolderListing('ideas')
+    const nested = await getFolderListing('ideas/ai')
+
+    expect(root).toMatchObject({
+      path: '',
+      name: '',
+      folders: [
+        { path: 'ideas', name: 'ideas', noteCount: 3, directNoteCount: 2 },
+        { path: 'projects', name: 'projects', noteCount: 1, directNoteCount: 0 },
+      ],
+      notes: [{ relPath: 'inbox.md' }],
+    })
+
+    expect(ideas).toMatchObject({
+      path: 'ideas',
+      name: 'ideas',
+      folders: [{ path: 'ideas/ai', name: 'ai', noteCount: 1, directNoteCount: 1 }],
+      notes: [{ relPath: 'ideas/alpha.md' }, { relPath: 'ideas/zeta.md' }],
+    })
+
+    expect(nested).toMatchObject({
+      path: 'ideas/ai',
+      name: 'ai',
+      folders: [],
+      notes: [{ relPath: 'ideas/ai/agent-memory.md' }],
     })
   })
 })
