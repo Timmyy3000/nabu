@@ -21,12 +21,21 @@ Nabu is named after the Mesopotamian god of writing, scribes, literacy, and reco
 This project is in active early development.
 
 Current direction:
-- React + Vite
-- TanStack Router
-- TanStack Query
-- A lightweight backend for safe filesystem access and auth
+- TanStack Start
+- Filesystem-first mounted vaults via `KNOWLEDGE_PATH`
+- Safe server-side indexing and read-only retrieval
 - Dokploy-friendly deployment
 - Password-protected private knowledge spaces
+
+## Shipped in v0.1.0
+
+- Mounted vault configuration and validation
+- Safe markdown file scanning
+- Frontmatter + metadata normalization
+- In-memory vault indexing primitives
+- Folder tree and note listing retrieval
+- Web note browsing UI with rendered markdown
+- Env-based password auth with session cookies
 
 ## Open-source model
 
@@ -95,11 +104,12 @@ Repo-safe demo content can live in `examples/`.
 - [x] Initialize frontend app shell
 - [x] Establish open-source repo structure
 - [x] Add documentation for architecture and content model
-- [ ] Add testing and CI foundations
-- [ ] Build backend note indexer
-- [ ] Render markdown notes from disk
+- [x] Add testing and CI foundations
+- [x] Build backend note indexer
+- [x] Render markdown notes from disk
+- [x] Add auth for private deployments
+- [ ] Add `/agents` agent-facing entrypoint
 - [ ] Add tags, backlinks, and graph traversal
-- [ ] Add auth for private deployments
 - [ ] Ship Dokploy deployment config
 
 ## License
