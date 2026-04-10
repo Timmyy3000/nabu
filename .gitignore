@@ -10,3 +10,4 @@ coverage/
 content/
 private-content/
 scratchpad/
+.output/
