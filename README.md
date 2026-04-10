@@ -30,6 +30,7 @@ Current direction:
 ## Shipped in v0.1.0
 
 - Mounted vault configuration and validation
+- Automatic vault directory creation on first boot
 - Safe markdown file scanning
 - Frontmatter + metadata normalization
 - In-memory vault indexing primitives
@@ -86,9 +87,11 @@ Set `NABU_PASSWORD` before running for private access (example: `NABU_PASSWORD=c
 Real content should be mounted from a separate path, for example:
 
 ```bash
-KNOWLEDGE_PATH=/data/nabu
+KNOWLEDGE_PATH=/data/nabu/knowledge
 NABU_PASSWORD=change-me
 ```
+
+Mount `/data/nabu` (or another parent app-data directory) as persistent storage and let Nabu create `/knowledge` on first boot if it does not already exist.
 
 Repo-safe demo content can live in `examples/`.
 

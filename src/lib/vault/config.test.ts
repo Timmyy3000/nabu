@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { getVaultConfig } from './config'
@@ -39,6 +39,17 @@ describe('getVaultConfig', () => {
     const config = await getVaultConfig()
 
     expect(config.rootPath).toBe(tempDir)
+  })
+
+  it('creates KNOWLEDGE_PATH when it does not exist yet', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'nabu-vault-config-'))
+    const vaultDir = path.join(tempDir, 'data', 'knowledge')
+    process.env.KNOWLEDGE_PATH = vaultDir
+
+    const config = await getVaultConfig()
+
+    expect(config.rootPath).toBe(vaultDir)
+    await expect(access(vaultDir)).resolves.toBeUndefined()
   })
 
   it('throws when KNOWLEDGE_PATH points to a file', async () => {

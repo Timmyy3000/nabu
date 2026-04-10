@@ -2,6 +2,20 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.1.1] - 2026-04-10
+
+Deployment DX release.
+
+### Shipped
+
+- Automatic creation of `KNOWLEDGE_PATH` on first boot when the directory does not yet exist
+- Simpler default env example for mounted app data at `/data/nabu/knowledge`
+- Updated deployment docs to reflect the mounted parent directory + auto-created knowledge folder flow
+
+### Why it matters
+
+Nabu is aiming for dead-simple self-hosting. A fresh deploy should not fail just because a user forgot to pre-create a subdirectory inside their mounted data path.
+
 ## [0.1.0] - 2026-04-10
 
 First deployable MVP release.
