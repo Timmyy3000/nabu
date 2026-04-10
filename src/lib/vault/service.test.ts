@@ -6,6 +6,7 @@ import {
   __resetVaultServiceForTests,
   getVaultBrowseData,
   getFolderListing,
+  getNoteByPath,
   getNoteBySlug,
   getVaultIndex,
   getVaultTree,
@@ -96,6 +97,24 @@ describe('vault service', () => {
       },
       collisions: [],
     })
+  })
+
+  it('returns note by canonical vault-relative path', async () => {
+    await createVaultFixture({
+      'ideas/agent-memory.md': '# Agent Memory',
+    })
+
+    const found = await getNoteByPath('ideas/agent-memory.md')
+    const missing = await getNoteByPath('ideas/missing.md')
+
+    expect(found).toMatchObject({
+      note: {
+        relPath: 'ideas/agent-memory.md',
+        slug: 'agent-memory',
+      },
+    })
+
+    expect(missing).toBeNull()
   })
 
   it('builds a deterministic nested folder tree for navigation', async () => {

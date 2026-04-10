@@ -49,6 +49,11 @@ type VaultSlugLookup = {
   note: VaultNotePayload
 }
 
+type VaultPathLookup = {
+  builtAt: string
+  note: VaultNotePayload
+}
+
 type VaultFolderListing = {
   path: string
   name: string
@@ -161,6 +166,19 @@ function normalizeFolderPathInput(folderPath: string | null | undefined): string
   const trimmed = folderPath.trim()
   if (!trimmed) {
     return ''
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+function normalizeNotePathInput(notePath: string | null | undefined): string {
+  if (notePath == null) {
+    throw new Error('Note path is required')
+  }
+
+  const trimmed = notePath.trim()
+  if (!trimmed) {
+    throw new Error('Note path is required')
   }
 
   return normalizeVaultPath(trimmed)
@@ -292,6 +310,21 @@ export async function getNoteBySlug(slug: string): Promise<VaultSlugLookup | nul
   return {
     builtAt: index.builtAt,
     collisions: index.slugCollisions.get(normalizedSlug) ?? [],
+    note: toVaultNotePayload(note),
+  }
+}
+
+export async function getNoteByPath(relPath: string): Promise<VaultPathLookup | null> {
+  const normalizedPath = normalizeVaultPath(relPath)
+  const index = await getVaultIndex()
+  const note = index.byRelPath.get(normalizedPath)
+
+  if (!note) {
+    return null
+  }
+
+  return {
+    builtAt: index.builtAt,
     note: toVaultNotePayload(note),
   }
 }
@@ -531,6 +564,36 @@ export async function getVaultNoteBySlugResponse(slug: string): Promise<Response
   return Response.json(found)
 }
 
+export async function getVaultNoteByPathResponse(pathInput: string | null | undefined): Promise<Response> {
+  let normalizedPath: string
+
+  try {
+    normalizedPath = normalizeNotePathInput(pathInput)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: pathInput ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const found = await getNoteByPath(normalizedPath)
+
+  if (!found) {
+    return Response.json(
+      {
+        error: 'Note not found',
+        path: normalizedPath,
+      },
+      { status: 404 },
+    )
+  }
+
+  return Response.json(found)
+}
+
 export function __resetVaultServiceForTests() {
   cachedIndex = null
   inFlightBuild = null
@@ -543,6 +606,7 @@ export type {
   VaultIndexStats,
   VaultIndexSummaryNote,
   VaultNotePayload,
+  VaultPathLookup,
   VaultSearchResponse,
   VaultSlugLookup,
 }

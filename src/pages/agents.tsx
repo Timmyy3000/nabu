@@ -30,6 +30,9 @@ export function AgentsPage() {
           <code>GET /api/vault/notes/$slug</code>: note lookup by slug (`note`, `collisions`, `builtAt`).
         </li>
         <li>
+          <code>GET /api/vault/notes/by-path?path=</code>: deterministic note lookup by canonical vault-relative path (`note`, `builtAt`).
+        </li>
+        <li>
           <code>GET /api/vault/search?q=&amp;path=&amp;limit=&amp;offset=</code>: lexical search over note metadata and body.
         </li>
       </ul>
@@ -40,6 +43,7 @@ export function AgentsPage() {
       <h2>Note Identity Conventions</h2>
       <ul>
         <li>Use vault-relative `relPath` as the canonical location.</li>
+        <li>Use `/api/vault/notes/by-path?path=...` for deterministic retrieval when `relPath` is known.</li>
         <li>Use `slug` for lookup/navigation when convenient.</li>
         <li>Slug collisions can exist; check `collisions` when using `/api/vault/notes/$slug`.</li>
       </ul>
@@ -65,7 +69,7 @@ export function AgentsPage() {
         <li>Read `/agents.md`.</li>
         <li>Read `/api/vault/tree` to map folder structure.</li>
         <li>Read `/api/vault/folders?path=...` for the target folder.</li>
-        <li>Read target notes via `/api/vault/notes/$slug` and track `relPath`.</li>
+        <li>Read target notes via `/api/vault/notes/by-path?path=...` once `relPath` is known.</li>
       </ol>
     </article>
   )

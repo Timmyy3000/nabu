@@ -7,6 +7,7 @@ import {
   getVaultFolderListingResponse,
   getVaultIndexResponse,
   getVaultIndexStatsResponse,
+  getVaultNoteByPathResponse,
   getVaultNoteBySlugResponse,
   getVaultSearchResponse,
   getVaultTreeResponse,
@@ -130,6 +131,41 @@ describe('vault retrieval contracts', () => {
     expect(missingPayload).toEqual({
       error: 'Note not found',
       slug: 'missing',
+    })
+  })
+
+  it('returns note payload by path, 400 for invalid path, and 404 for unknown note', async () => {
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const found = await getVaultNoteByPathResponse(' projects\\nabu\\roadmap.md ')
+    const foundPayload = await found.json()
+    const invalid = await getVaultNoteByPathResponse('../secrets.md')
+    const invalidPayload = await invalid.json()
+    const missing = await getVaultNoteByPathResponse('projects/nabu/missing.md')
+    const missingPayload = await missing.json()
+
+    expect(found.status).toBe(200)
+    expect(foundPayload).toMatchObject({
+      builtAt: expect.any(String),
+      note: {
+        relPath: 'projects/nabu/roadmap.md',
+        slug: 'roadmap',
+        body: '# Roadmap',
+      },
+    })
+
+    expect(invalid.status).toBe(400)
+    expect(invalidPayload).toEqual({
+      error: 'Invalid note path',
+      path: '../secrets.md',
+    })
+
+    expect(missing.status).toBe(404)
+    expect(missingPayload).toEqual({
+      error: 'Note not found',
+      path: 'projects/nabu/missing.md',
     })
   })
 
