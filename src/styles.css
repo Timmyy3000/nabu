@@ -154,6 +154,30 @@ select {
   color: #8c2b2b;
 }
 
+.agents-doc {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.agents-doc h2 {
+  margin-top: 1.25rem;
+}
+
+.agents-doc code {
+  background: #f0eee6;
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.agents-doc ul,
+.agents-doc ol {
+  padding-left: 1.25rem;
+}
+
+.agents-doc li {
+  margin: 0.35rem 0;
+}
+
 @media (max-width: 900px) {
   .vault-layout {
     grid-template-columns: 1fr;

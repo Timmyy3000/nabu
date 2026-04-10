@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AgentsDotmdRouteImport } from './routes/agents[.]md'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
 import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
@@ -27,6 +28,11 @@ const LogoutRoute = LogoutRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentsDotmdRoute = AgentsDotmdRouteImport.update({
+  id: '/agents.md',
+  path: '/agents.md',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -67,6 +73,7 @@ const ApiVaultIndexStatsRoute = ApiVaultIndexStatsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agents.md'
     | '/login'
     | '/logout'
     | '/api/auth/login'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agents.md'
     | '/login'
     | '/logout'
     | '/api/auth/login'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agents.md'
     | '/login'
     | '/logout'
     | '/api/auth/login'
@@ -137,6 +149,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentsDotmdRoute: typeof AgentsDotmdRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agents.md': {
+      id: '/agents.md'
+      path: '/agents.md'
+      fullPath: '/agents.md'
+      preLoaderRoute: typeof AgentsDotmdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -217,6 +237,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentsDotmdRoute: AgentsDotmdRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
