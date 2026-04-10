@@ -118,6 +118,42 @@ select {
   overflow-x: auto;
 }
 
+.logout-link {
+  font-size: 0.85rem;
+  color: #4f4d45;
+  text-decoration: underline;
+}
+
+.auth-card {
+  max-width: 420px;
+  margin: 8vh auto 0;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.auth-form input {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #bcb8ab;
+  border-radius: 0.35rem;
+  background: #fffdf8;
+}
+
+.auth-form button {
+  width: fit-content;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #7f7a69;
+  border-radius: 0.35rem;
+  background: #e6e2d6;
+  cursor: pointer;
+}
+
+.auth-error {
+  color: #8c2b2b;
+}
+
 @media (max-width: 900px) {
   .vault-layout {
     grid-template-columns: 1fr;

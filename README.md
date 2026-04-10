@@ -65,6 +65,8 @@ npm install
 npm run dev
 ```
 
+Set `NABU_PASSWORD` before running for private access (example: `NABU_PASSWORD=change-me`).
+
 ## Tooling
 
 - **Local development:** Bun preferred (`bun.lock` is canonical locally)
@@ -76,6 +78,7 @@ Real content should be mounted from a separate path, for example:
 
 ```bash
 KNOWLEDGE_PATH=/data/nabu
+NABU_PASSWORD=change-me
 ```
 
 Repo-safe demo content can live in `examples/`.

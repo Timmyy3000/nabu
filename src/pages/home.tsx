@@ -26,6 +26,11 @@ export function HomePage({ browse }: { browse: VaultBrowseData }) {
     <div className="vault-layout">
       <aside className="vault-sidebar panel">
         <p className="eyebrow">Nabu</p>
+        <p>
+          <a href="/logout" className="logout-link">
+            Logout
+          </a>
+        </p>
         <h1>Knowledge Vault</h1>
         <ul className="tree-list">{renderTreeNode(browse.tree)}</ul>
       </aside>
