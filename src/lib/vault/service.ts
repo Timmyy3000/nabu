@@ -4,7 +4,7 @@ import { normalizeVaultPath } from '../paths'
 import { getVaultConfig } from './config'
 import { listMarkdownFiles } from './filesystem'
 import { buildVaultIndex } from './index'
-import { parseNote, type ParsedVaultNote } from './parse-note'
+import { parseNote, type ParsedVaultNote, type VaultNoteLink } from './parse-note'
 import {
   normalizeSearchLimit,
   normalizeSearchOffset,
@@ -41,6 +41,7 @@ type VaultNotePayload = {
   updatedAt: string | null
   frontmatter: Record<string, unknown>
   body: string
+  outgoingLinks: VaultNoteLink[]
 }
 
 type VaultSlugLookup = {
@@ -155,6 +156,7 @@ function toVaultNotePayload(note: ParsedVaultNote): VaultNotePayload {
     updatedAt: note.updatedAt,
     frontmatter: note.frontmatter,
     body: note.body,
+    outgoingLinks: note.outgoingLinks,
   }
 }
 

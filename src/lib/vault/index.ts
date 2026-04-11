@@ -1,5 +1,6 @@
 import path from 'node:path'
-import type { ParsedVaultNote } from './parse-note'
+import { normalizeVaultPath } from '../paths'
+import type { ParsedVaultNote, VaultNoteLink } from './parse-note'
 import type { VaultIndex } from './types'
 
 function compareStrings(left: string, right: string): number {
@@ -28,6 +29,181 @@ function collectFolders(relPath: string): string[] {
   }
 
   return folders
+}
+
+function normalizeWikiSlugTarget(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function normalizeTitleLookup(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function stripQueryAndFragment(target: string): string {
+  const withoutHash = target.split('#')[0] ?? target
+  return withoutHash.split('?')[0] ?? withoutHash
+}
+
+function toSafeVaultPath(target: string): string | null {
+  try {
+    return normalizeVaultPath(target)
+  } catch {
+    return null
+  }
+}
+
+function resolvePathLikeTarget(input: {
+  target: string
+  byRelPath: Map<string, ParsedVaultNote>
+}): ParsedVaultNote | null {
+  const targetWithoutExtras = stripQueryAndFragment(input.target).trim()
+  if (!targetWithoutExtras) {
+    return null
+  }
+
+  const rawTarget = targetWithoutExtras.startsWith('/') ? targetWithoutExtras.slice(1) : targetWithoutExtras
+  const normalizedTarget = toSafeVaultPath(rawTarget)
+  if (!normalizedTarget) {
+    return null
+  }
+
+  const directMatch = input.byRelPath.get(normalizedTarget)
+  if (directMatch) {
+    return directMatch
+  }
+
+  if (!normalizedTarget.toLowerCase().endsWith('.md')) {
+    return input.byRelPath.get(`${normalizedTarget}.md`) ?? null
+  }
+
+  return null
+}
+
+function resolveRelativeMarkdownTarget(input: {
+  sourceRelPath: string
+  target: string
+  byRelPath: Map<string, ParsedVaultNote>
+}): ParsedVaultNote | null {
+  const targetWithoutExtras = stripQueryAndFragment(input.target).trim()
+  if (!targetWithoutExtras) {
+    return null
+  }
+
+  if (targetWithoutExtras.startsWith('/')) {
+    return resolvePathLikeTarget({
+      target: targetWithoutExtras,
+      byRelPath: input.byRelPath,
+    })
+  }
+
+  const sourceFolder = path.posix.dirname(input.sourceRelPath)
+  const resolved = path.posix.normalize(path.posix.join(sourceFolder, targetWithoutExtras))
+
+  if (!resolved || resolved === '.' || resolved === '..' || resolved.startsWith('../') || resolved.startsWith('/')) {
+    return null
+  }
+
+  const normalized = toSafeVaultPath(resolved)
+  if (!normalized) {
+    return null
+  }
+
+  const directMatch = input.byRelPath.get(normalized)
+  if (directMatch) {
+    return directMatch
+  }
+
+  if (!normalized.toLowerCase().endsWith('.md')) {
+    return input.byRelPath.get(`${normalized}.md`) ?? null
+  }
+
+  return null
+}
+
+function resolveWikiTarget(input: {
+  target: string
+  byRelPath: Map<string, ParsedVaultNote>
+  bySlug: Map<string, ParsedVaultNote>
+  slugEntries: Map<string, string[]>
+  titleEntries: Map<string, string[]>
+}): ParsedVaultNote | null {
+  const target = input.target.trim()
+  if (!target) {
+    return null
+  }
+
+  const isPathLike = target.includes('/') || target.toLowerCase().endsWith('.md')
+
+  if (isPathLike) {
+    const pathMatch = resolvePathLikeTarget({ target, byRelPath: input.byRelPath })
+    if (pathMatch) {
+      return pathMatch
+    }
+  }
+
+  const normalizedSlug = normalizeWikiSlugTarget(target)
+  if (normalizedSlug) {
+    const slugMatches = input.slugEntries.get(normalizedSlug) ?? []
+    if (slugMatches.length === 1) {
+      return input.bySlug.get(normalizedSlug) ?? null
+    }
+  }
+
+  const normalizedTitle = normalizeTitleLookup(target)
+  if (!normalizedTitle) {
+    return null
+  }
+
+  const titleMatches = input.titleEntries.get(normalizedTitle) ?? []
+  if (titleMatches.length !== 1) {
+    return null
+  }
+
+  return input.byRelPath.get(titleMatches[0] ?? '') ?? null
+}
+
+function resolveOutgoingLink(input: {
+  sourceRelPath: string
+  link: VaultNoteLink
+  byRelPath: Map<string, ParsedVaultNote>
+  bySlug: Map<string, ParsedVaultNote>
+  slugEntries: Map<string, string[]>
+  titleEntries: Map<string, string[]>
+}): VaultNoteLink {
+  const targetNote =
+    input.link.kind === 'wiki'
+      ? resolveWikiTarget({
+          target: input.link.target,
+          byRelPath: input.byRelPath,
+          bySlug: input.bySlug,
+          slugEntries: input.slugEntries,
+          titleEntries: input.titleEntries,
+        })
+      : resolveRelativeMarkdownTarget({
+          sourceRelPath: input.sourceRelPath,
+          target: input.link.target,
+          byRelPath: input.byRelPath,
+        })
+
+  if (!targetNote) {
+    return {
+      ...input.link,
+      resolved: false,
+      targetRelPath: null,
+      targetSlug: null,
+    }
+  }
+
+  return {
+    ...input.link,
+    resolved: true,
+    targetRelPath: targetNote.relPath,
+    targetSlug: targetNote.slug,
+  }
 }
 
 export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
@@ -71,6 +247,7 @@ export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
   }
 
   const slugCollisions = new Map<string, string[]>()
+  const titleEntries = new Map<string, string[]>()
 
   for (const [slug, relPaths] of slugEntries) {
     if (relPaths.length < 2) {
@@ -79,6 +256,33 @@ export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
 
     slugCollisions.set(slug, relPaths)
     warnings.push(`Duplicate slug "${slug}" found in: ${relPaths.join(', ')}`)
+  }
+
+  for (const note of notes) {
+    const normalizedTitle = normalizeTitleLookup(note.title)
+    if (!normalizedTitle) {
+      continue
+    }
+
+    const entries = titleEntries.get(normalizedTitle)
+    if (entries) {
+      entries.push(note.relPath)
+    } else {
+      titleEntries.set(normalizedTitle, [note.relPath])
+    }
+  }
+
+  for (const note of notes) {
+    note.outgoingLinks = note.outgoingLinks.map((link) =>
+      resolveOutgoingLink({
+        sourceRelPath: note.relPath,
+        link,
+        byRelPath,
+        bySlug,
+        slugEntries,
+        titleEntries,
+      }),
+    )
   }
 
   const folders = [...folderSet].sort(compareStrings)

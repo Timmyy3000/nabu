@@ -117,6 +117,45 @@ describe('vault service', () => {
     expect(missing).toBeNull()
   })
 
+  it('includes outgoing links in note retrieval payloads', async () => {
+    await createVaultFixture({
+      'ideas/source.md': `[[Roadmap]]\n[Roadmap Doc](../projects/roadmap.md)\n[[Missing]]`,
+      'projects/roadmap.md': '---\nslug: roadmap\n---\n# Roadmap',
+    })
+
+    const found = await getNoteByPath('ideas/source.md')
+
+    expect(found?.note.outgoingLinks).toEqual([
+      {
+        raw: '[[Roadmap]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Roadmap',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+      {
+        raw: '[Roadmap Doc](../projects/roadmap.md)',
+        kind: 'markdown',
+        text: 'Roadmap Doc',
+        target: '../projects/roadmap.md',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+      {
+        raw: '[[Missing]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Missing',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
+
   it('builds a deterministic nested folder tree for navigation', async () => {
     await createVaultFixture({
       'inbox.md': '# Inbox',

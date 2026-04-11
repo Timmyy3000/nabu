@@ -77,4 +77,115 @@ describe('buildVaultIndex', () => {
     expect(index.tags.get('systems')).toEqual(['ideas/c.md'])
     expect(index.stats.tagCount).toBe(3)
   })
+
+  it('resolves wiki-links and markdown note links against the index', () => {
+    const notes = [
+      note(
+        'ideas/source.md',
+        [
+          '[[projects/roadmap.md]]',
+          '[[projects/vision]]',
+          '[[roadmap]]',
+          '[[Product Vision]]',
+          '[[Unknown Note]]',
+          '[Roadmap](../projects/roadmap.md)',
+          '[Missing](../projects/missing.md)',
+        ].join('\n'),
+      ),
+      note('projects/roadmap.md', '---\nslug: roadmap\n---\n# Roadmap'),
+      note('projects/vision.md', '---\ntitle: Product Vision\n---\n# Vision'),
+    ]
+
+    const index = buildVaultIndex(notes)
+    const source = index.byRelPath.get('ideas/source.md')
+
+    expect(source?.outgoingLinks).toEqual([
+      {
+        raw: '[[projects/roadmap.md]]',
+        kind: 'wiki',
+        text: null,
+        target: 'projects/roadmap.md',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+      {
+        raw: '[[projects/vision]]',
+        kind: 'wiki',
+        text: null,
+        target: 'projects/vision',
+        resolved: true,
+        targetRelPath: 'projects/vision.md',
+        targetSlug: 'vision',
+      },
+      {
+        raw: '[[roadmap]]',
+        kind: 'wiki',
+        text: null,
+        target: 'roadmap',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+      {
+        raw: '[[Product Vision]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Product Vision',
+        resolved: true,
+        targetRelPath: 'projects/vision.md',
+        targetSlug: 'vision',
+      },
+      {
+        raw: '[[Unknown Note]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Unknown Note',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        raw: '[Roadmap](../projects/roadmap.md)',
+        kind: 'markdown',
+        text: 'Roadmap',
+        target: '../projects/roadmap.md',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+      {
+        raw: '[Missing](../projects/missing.md)',
+        kind: 'markdown',
+        text: 'Missing',
+        target: '../projects/missing.md',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
+
+  it('keeps ambiguous wiki title matches unresolved', () => {
+    const notes = [
+      note('ideas/source.md', '[[Shared Title]]'),
+      note('projects/one.md', '---\ntitle: Shared Title\n---\n# One'),
+      note('projects/two.md', '---\ntitle: Shared Title\n---\n# Two'),
+    ]
+
+    const index = buildVaultIndex(notes)
+    const source = index.byRelPath.get('ideas/source.md')
+
+    expect(source?.outgoingLinks).toEqual([
+      {
+        raw: '[[Shared Title]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Shared Title',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
 })
