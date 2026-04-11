@@ -375,7 +375,11 @@ export async function getVaultBrowseData(input: {
   let selectedNote: VaultNotePayload | null = null
 
   if (requestedSlug) {
-    const requestedNote = await getNoteBySlug(requestedSlug)
+    const matchingNoteInFolder = folderListing.notes.find((note) => note.slug === requestedSlug)
+    const requestedNote = matchingNoteInFolder
+      ? await getNoteByPath(matchingNoteInFolder.relPath)
+      : await getNoteBySlug(requestedSlug)
+
     if (requestedNote && isNoteInFolder(requestedNote.note.relPath, folderListing.path)) {
       selectedNoteSlug = requestedSlug
       selectedNote = requestedNote.note
@@ -385,7 +389,7 @@ export async function getVaultBrowseData(input: {
   if (!selectedNote) {
     const fallback = folderListing.notes[0]
     if (fallback) {
-      const fallbackNote = await getNoteBySlug(fallback.slug)
+      const fallbackNote = await getNoteByPath(fallback.relPath)
       selectedNoteSlug = fallback.slug
       selectedNote = fallbackNote?.note ?? null
     }

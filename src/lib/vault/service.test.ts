@@ -242,4 +242,21 @@ describe('vault service', () => {
     expect(mismatchedNote.selectedNoteSlug).toBe('alpha')
     expect(mismatchedNote.note?.relPath).toBe('ideas/alpha.md')
   })
+
+  it('keeps fallback note selection inside the active folder when slug collisions exist', async () => {
+    await createVaultFixture({
+      '0-root.md': '---\nslug: shared\n---\n# Root Shared',
+      'ideas/a.md': '---\nslug: shared\n---\n# Ideas Shared',
+      'ideas/b.md': '# Ideas B',
+    })
+
+    const browse = await getVaultBrowseData({
+      folderPath: 'ideas',
+      noteSlug: '',
+    })
+
+    expect(browse.folder.path).toBe('ideas')
+    expect(browse.selectedNoteSlug).toBe('shared')
+    expect(browse.note?.relPath).toBe('ideas/a.md')
+  })
 })

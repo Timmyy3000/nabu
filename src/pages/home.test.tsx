@@ -8,8 +8,21 @@ import { HomePage } from './home'
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, search, ...props }: ComponentProps<'a'> & { to?: string; search?: unknown }) => {
     const href = typeof to === 'string' ? to : '/'
+    const previousSearch = {
+      folder: 'prev-folder',
+      note: 'prev-note',
+      q: 'prev-q',
+      searchPath: 'prev-path',
+    }
+    const nextSearch = typeof search === 'function' ? search(previousSearch) : null
+
     return (
-      <a {...props} href={href} data-search={typeof search === 'function' ? 'fn' : undefined}>
+      <a
+        {...props}
+        href={href}
+        data-search={typeof search === 'function' ? 'fn' : undefined}
+        data-search-value={nextSearch ? JSON.stringify(nextSearch) : undefined}
+      >
         {children}
       </a>
     )
@@ -131,5 +144,93 @@ describe('HomePage', () => {
     )
 
     expect(screen.getByRole('link', { name: /clear/i })).toBeInTheDocument()
+  })
+
+  it('clears search state when navigating from search results to a note', () => {
+    render(
+      <HomePage
+        browse={buildBrowseFixture()}
+        search={{
+          query: 'agent memory',
+          normalizedQuery: 'agent memory',
+          path: 'ideas',
+          limit: 20,
+          offset: 0,
+          total: 1,
+          hasMore: false,
+          results: [
+            {
+              id: 'ideas/alpha.md',
+              relPath: 'ideas/alpha.md',
+              slug: 'alpha',
+              title: 'Alpha',
+              summary: null,
+              tags: ['ai'],
+              score: 140,
+              reasons: ['title-exact', 'phrase'],
+              snippet: '... agent memory ...',
+            },
+          ],
+        }}
+        searchPathInput="ideas"
+      />,
+    )
+
+    const resultLink = screen.getByRole('link', { name: 'Alpha' })
+    expect(JSON.parse(resultLink.getAttribute('data-search-value') ?? '{}')).toMatchObject({
+      folder: 'ideas',
+      note: 'alpha',
+      q: '',
+      searchPath: '',
+    })
+  })
+
+  it('clears search state when selecting a folder from the tree', () => {
+    render(
+      <HomePage
+        browse={buildBrowseFixture()}
+        search={{
+          query: 'agent',
+          normalizedQuery: 'agent',
+          path: 'ideas',
+          limit: 20,
+          offset: 0,
+          total: 0,
+          hasMore: false,
+          results: [],
+        }}
+        searchPathInput="ideas"
+      />,
+    )
+
+    const folderLink = screen.getByRole('link', { name: /ideas/i })
+    expect(JSON.parse(folderLink.getAttribute('data-search-value') ?? '{}')).toMatchObject({
+      folder: 'ideas',
+      note: '',
+      q: '',
+      searchPath: '',
+    })
+  })
+
+  it('shows an empty folder message when no notes are available', () => {
+    render(
+      <HomePage
+        browse={{
+          ...buildBrowseFixture(),
+          folder: {
+            path: 'ideas/empty',
+            name: 'empty',
+            folders: [],
+            notes: [],
+          },
+          selectedNoteSlug: null,
+          note: null,
+        }}
+        search={null}
+        searchPathInput=""
+      />,
+    )
+
+    expect(screen.getByText('No notes in this folder yet.')).toBeInTheDocument()
   })
 })

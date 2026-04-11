@@ -30,7 +30,7 @@ export function HomePage({
       <li key={node.path || 'root'}>
         <Link
           to="/"
-          search={(prev) => ({ ...prev, folder: node.path, note: '' })}
+          search={(prev) => ({ ...prev, folder: node.path, note: '', q: '', searchPath: '' })}
           className={node.path === browse.folder.path ? 'is-active' : undefined}
         >
           {node.name || 'Root'} <span className="muted">({node.noteCount})</span>
@@ -98,6 +98,8 @@ export function HomePage({
                       ...prev,
                       folder: getParentFolderPath(result.relPath),
                       note: result.slug,
+                      q: '',
+                      searchPath: '',
                     })}
                   >
                     {result.title}
@@ -113,23 +115,27 @@ export function HomePage({
           <>
             <h2>{folderTitle}</h2>
             <p className="muted">{browse.folder.notes.length} notes</p>
-            <ul className="note-list">
-              {browse.folder.notes.map((note) => (
-                <li key={note.id}>
-                  <Link
-                    to="/"
-                    search={(prev) => ({
-                      ...prev,
-                      folder: browse.folder.path,
-                      note: note.slug,
-                    })}
-                    className={note.slug === browse.selectedNoteSlug ? 'is-active' : undefined}
-                  >
-                    {note.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            {browse.folder.notes.length > 0 ? (
+              <ul className="note-list">
+                {browse.folder.notes.map((note) => (
+                  <li key={note.id}>
+                    <Link
+                      to="/"
+                      search={(prev) => ({
+                        ...prev,
+                        folder: browse.folder.path,
+                        note: note.slug,
+                      })}
+                      className={note.slug === browse.selectedNoteSlug ? 'is-active' : undefined}
+                    >
+                      {note.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No notes in this folder yet.</p>
+            )}
           </>
         )}
       </section>
