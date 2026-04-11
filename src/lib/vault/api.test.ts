@@ -7,6 +7,7 @@ import {
   getVaultFolderListingResponse,
   getVaultIndexResponse,
   getVaultIndexStatsResponse,
+  getVaultNoteNeighborhoodResponse,
   getVaultNoteByPathResponse,
   getVaultNoteBySlugResponse,
   getVaultSearchResponse,
@@ -166,6 +167,55 @@ describe('vault retrieval contracts', () => {
     expect(missingPayload).toEqual({
       error: 'Note not found',
       path: 'projects/nabu/missing.md',
+    })
+  })
+
+  it('returns neighborhood payload by path, 400 for invalid path, and 404 for unknown note', async () => {
+    await createVaultFixture({
+      'projects/roadmap.md': '[[projects/vision.md]]',
+      'projects/vision.md': '# Vision',
+      'projects/plan.md': '[[projects/roadmap.md]]',
+    })
+
+    const found = await getVaultNoteNeighborhoodResponse('projects/roadmap.md')
+    const foundPayload = await found.json()
+    const invalid = await getVaultNoteNeighborhoodResponse('../secrets.md')
+    const invalidPayload = await invalid.json()
+    const missing = await getVaultNoteNeighborhoodResponse('projects/missing.md')
+    const missingPayload = await missing.json()
+
+    expect(found.status).toBe(200)
+    expect(foundPayload).toMatchObject({
+      builtAt: expect.any(String),
+      note: {
+        relPath: 'projects/roadmap.md',
+        slug: 'roadmap',
+      },
+      outgoing: [{ targetRelPath: 'projects/vision.md', targetSlug: 'vision' }],
+      backlinks: [
+        {
+          sourceRelPath: 'projects/plan.md',
+          sourceSlug: 'plan',
+          raw: '[[projects/roadmap.md]]',
+        },
+      ],
+      stats: {
+        outgoingResolvedCount: 1,
+        backlinkCount: 1,
+        unresolvedOutgoingCount: 0,
+      },
+    })
+
+    expect(invalid.status).toBe(400)
+    expect(invalidPayload).toEqual({
+      error: 'Invalid note path',
+      path: '../secrets.md',
+    })
+
+    expect(missing.status).toBe(404)
+    expect(missingPayload).toEqual({
+      error: 'Note not found',
+      path: 'projects/missing.md',
     })
   })
 

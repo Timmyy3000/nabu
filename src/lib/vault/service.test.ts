@@ -7,6 +7,7 @@ import {
   getVaultBrowseData,
   getFolderListing,
   getNoteByPath,
+  getNoteNeighborhoodByPath,
   getNoteBySlug,
   getVaultIndex,
   getVaultTree,
@@ -123,9 +124,10 @@ describe('vault service', () => {
       'projects/roadmap.md': '---\nslug: roadmap\n---\n# Roadmap',
     })
 
-    const found = await getNoteByPath('ideas/source.md')
+    const source = await getNoteByPath('ideas/source.md')
+    const roadmap = await getNoteByPath('projects/roadmap.md')
 
-    expect(found?.note.outgoingLinks).toEqual([
+    expect(source?.note.outgoingLinks).toEqual([
       {
         raw: '[[Roadmap]]',
         kind: 'wiki',
@@ -154,6 +156,113 @@ describe('vault service', () => {
         targetSlug: null,
       },
     ])
+
+    expect(roadmap?.note.backlinks).toEqual([
+      {
+        sourceRelPath: 'ideas/source.md',
+        sourceSlug: 'source',
+        sourceTitle: 'source',
+        kind: 'markdown',
+        text: 'Roadmap Doc',
+        raw: '[Roadmap Doc](../projects/roadmap.md)',
+      },
+      {
+        sourceRelPath: 'ideas/source.md',
+        sourceSlug: 'source',
+        sourceTitle: 'source',
+        kind: 'wiki',
+        text: null,
+        raw: '[[Roadmap]]',
+      },
+    ])
+  })
+
+  it('builds deterministic neighborhood traversal data by canonical note path', async () => {
+    await createVaultFixture({
+      'projects/roadmap.md': [
+        '---',
+        'title: Product Roadmap',
+        'slug: roadmap',
+        '---',
+        '[[projects/vision.md]]',
+        '[[projects/tasks.md]]',
+        '[[projects/roadmap.md]]',
+        '[[missing]]',
+      ].join('\n'),
+      'projects/vision.md': '# Vision',
+      'projects/tasks.md': '# Tasks',
+      'projects/notes.md': '# Notes',
+      'projects/plan.md': '[[projects/roadmap.md]]',
+      'ideas/retrospective.md': '[[projects/roadmap.md]]',
+    })
+
+    const neighborhood = await getNoteNeighborhoodByPath('projects/roadmap.md')
+    expect(neighborhood).not.toBeNull()
+    expect(neighborhood).toMatchObject({
+      note: {
+        relPath: 'projects/roadmap.md',
+        slug: 'roadmap',
+        title: 'Product Roadmap',
+      },
+      outgoing: [
+        {
+          targetRelPath: 'projects/roadmap.md',
+          targetSlug: 'roadmap',
+        },
+        {
+          targetRelPath: 'projects/tasks.md',
+          targetSlug: 'tasks',
+        },
+        {
+          targetRelPath: 'projects/vision.md',
+          targetSlug: 'vision',
+        },
+      ],
+      stats: {
+        outgoingResolvedCount: 3,
+        backlinkCount: 3,
+        unresolvedOutgoingCount: 1,
+      },
+      relatedNotes: [
+        {
+          relPath: 'projects/plan.md',
+          slug: 'plan',
+          title: 'plan',
+          connectionCount: 3,
+          reasons: ['backlink', 'shared-folder'],
+        },
+        {
+          relPath: 'projects/tasks.md',
+          slug: 'tasks',
+          title: 'tasks',
+          connectionCount: 3,
+          reasons: ['outgoing', 'shared-folder'],
+        },
+        {
+          relPath: 'projects/vision.md',
+          slug: 'vision',
+          title: 'vision',
+          connectionCount: 3,
+          reasons: ['outgoing', 'shared-folder'],
+        },
+        {
+          relPath: 'ideas/retrospective.md',
+          slug: 'retrospective',
+          title: 'retrospective',
+          connectionCount: 2,
+          reasons: ['backlink'],
+        },
+        {
+          relPath: 'projects/notes.md',
+          slug: 'notes',
+          title: 'notes',
+          connectionCount: 1,
+          reasons: ['shared-folder'],
+        },
+      ],
+    })
+
+    expect(await getNoteNeighborhoodByPath('projects/missing.md')).toBeNull()
   })
 
   it('builds a deterministic nested folder tree for navigation', async () => {

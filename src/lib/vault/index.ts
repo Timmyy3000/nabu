@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
 import type { ParsedVaultNote, VaultNoteLink } from './parse-note'
-import type { VaultIndex } from './types'
+import type { VaultBacklink, VaultIndex, VaultResolvedOutgoingLink } from './types'
 
 function compareStrings(left: string, right: string): number {
   if (left < right) {
@@ -206,6 +206,34 @@ function resolveOutgoingLink(input: {
   }
 }
 
+function compareBacklinks(left: VaultBacklink, right: VaultBacklink): number {
+  const sourceOrder = compareStrings(left.sourceRelPath, right.sourceRelPath)
+  if (sourceOrder !== 0) {
+    return sourceOrder
+  }
+
+  const rawOrder = compareStrings(left.raw, right.raw)
+  if (rawOrder !== 0) {
+    return rawOrder
+  }
+
+  return compareStrings(left.sourceSlug, right.sourceSlug)
+}
+
+function compareResolvedOutgoing(left: VaultResolvedOutgoingLink, right: VaultResolvedOutgoingLink): number {
+  const pathOrder = compareStrings(left.targetRelPath, right.targetRelPath)
+  if (pathOrder !== 0) {
+    return pathOrder
+  }
+
+  const rawOrder = compareStrings(left.raw, right.raw)
+  if (rawOrder !== 0) {
+    return rawOrder
+  }
+
+  return compareStrings(left.target, right.target)
+}
+
 export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
   const notes = [...inputNotes].sort((left, right) => compareStrings(left.relPath, right.relPath))
 
@@ -248,6 +276,9 @@ export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
 
   const slugCollisions = new Map<string, string[]>()
   const titleEntries = new Map<string, string[]>()
+  const backlinksByTargetRelPath = new Map<string, VaultBacklink[]>()
+  const resolvedOutgoingBySourceRelPath = new Map<string, VaultResolvedOutgoingLink[]>()
+  const unresolvedOutgoingBySourceRelPath = new Map<string, VaultNoteLink[]>()
 
   for (const [slug, relPaths] of slugEntries) {
     if (relPaths.length < 2) {
@@ -283,6 +314,54 @@ export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
         titleEntries,
       }),
     )
+
+    const resolvedOutgoing = note.outgoingLinks
+      .flatMap((link): VaultResolvedOutgoingLink[] => {
+        if (!link.resolved || !link.targetRelPath || !link.targetSlug) {
+          return []
+        }
+
+        return [
+          {
+            raw: link.raw,
+            kind: link.kind,
+            text: link.text,
+            target: link.target,
+            targetRelPath: link.targetRelPath,
+            targetSlug: link.targetSlug,
+          },
+        ]
+      })
+      .sort(compareResolvedOutgoing)
+
+    const unresolvedOutgoing = note.outgoingLinks
+      .filter((link) => !link.resolved)
+      .sort((left, right) => compareStrings(left.raw, right.raw))
+
+    resolvedOutgoingBySourceRelPath.set(note.relPath, resolvedOutgoing)
+    unresolvedOutgoingBySourceRelPath.set(note.relPath, unresolvedOutgoing)
+
+    for (const link of resolvedOutgoing) {
+      const backlinks = backlinksByTargetRelPath.get(link.targetRelPath)
+      const backlink: VaultBacklink = {
+        sourceRelPath: note.relPath,
+        sourceSlug: note.slug,
+        sourceTitle: note.title,
+        kind: link.kind,
+        text: link.text,
+        raw: link.raw,
+      }
+
+      if (backlinks) {
+        backlinks.push(backlink)
+      } else {
+        backlinksByTargetRelPath.set(link.targetRelPath, [backlink])
+      }
+    }
+  }
+
+  for (const backlinks of backlinksByTargetRelPath.values()) {
+    backlinks.sort(compareBacklinks)
   }
 
   const folders = [...folderSet].sort(compareStrings)
@@ -292,6 +371,9 @@ export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
     byRelPath,
     bySlug,
     slugCollisions,
+    backlinksByTargetRelPath,
+    resolvedOutgoingBySourceRelPath,
+    unresolvedOutgoingBySourceRelPath,
     folders,
     tags,
     warnings,

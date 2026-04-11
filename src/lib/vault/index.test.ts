@@ -188,4 +188,70 @@ describe('buildVaultIndex', () => {
       },
     ])
   })
+
+  it('builds backlink entries from resolved outgoing links only', () => {
+    const notes = [
+      note(
+        'ideas/source-a.md',
+        [
+          '[[Roadmap]]',
+          '[Roadmap Doc](../projects/roadmap.md)',
+          '[[Roadmap]]',
+          '[[Missing]]',
+        ].join('\n'),
+      ),
+      note('ideas/source-b.md', '[[projects/roadmap.md]]'),
+      note('projects/roadmap.md', '---\ntitle: Product Roadmap\nslug: roadmap\n---\n# Roadmap'),
+    ]
+
+    const index = buildVaultIndex(notes)
+
+    expect(index.backlinksByTargetRelPath.get('projects/roadmap.md')).toEqual([
+      {
+        sourceRelPath: 'ideas/source-a.md',
+        sourceSlug: 'source-a',
+        sourceTitle: 'source-a',
+        kind: 'markdown',
+        text: 'Roadmap Doc',
+        raw: '[Roadmap Doc](../projects/roadmap.md)',
+      },
+      {
+        sourceRelPath: 'ideas/source-a.md',
+        sourceSlug: 'source-a',
+        sourceTitle: 'source-a',
+        kind: 'wiki',
+        text: null,
+        raw: '[[Roadmap]]',
+      },
+      {
+        sourceRelPath: 'ideas/source-a.md',
+        sourceSlug: 'source-a',
+        sourceTitle: 'source-a',
+        kind: 'wiki',
+        text: null,
+        raw: '[[Roadmap]]',
+      },
+      {
+        sourceRelPath: 'ideas/source-b.md',
+        sourceSlug: 'source-b',
+        sourceTitle: 'source-b',
+        kind: 'wiki',
+        text: null,
+        raw: '[[projects/roadmap.md]]',
+      },
+    ])
+    expect(index.backlinksByTargetRelPath.get('ideas/missing.md')).toBeUndefined()
+    expect(index.resolvedOutgoingBySourceRelPath.get('ideas/source-a.md')).toHaveLength(3)
+    expect(index.unresolvedOutgoingBySourceRelPath.get('ideas/source-a.md')).toEqual([
+      {
+        raw: '[[Missing]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Missing',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
 })

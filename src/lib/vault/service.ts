@@ -12,7 +12,15 @@ import {
   searchVaultIndex,
   type VaultSearchResponse,
 } from './search'
-import type { VaultFolderListItem, VaultFolderTreeNode, VaultIndex, VaultIndexStats } from './types'
+import type {
+  VaultBacklink,
+  VaultFolderListItem,
+  VaultFolderTreeNode,
+  VaultIndex,
+  VaultIndexStats,
+  VaultNoteNeighborhood,
+  VaultRelatedReason,
+} from './types'
 
 type LoadedVaultIndex = VaultIndex & {
   builtAt: string
@@ -42,6 +50,7 @@ type VaultNotePayload = {
   frontmatter: Record<string, unknown>
   body: string
   outgoingLinks: VaultNoteLink[]
+  backlinks: VaultBacklink[]
 }
 
 type VaultSlugLookup = {
@@ -144,7 +153,7 @@ function toSummaryNote(note: ParsedVaultNote): VaultIndexSummaryNote {
   }
 }
 
-function toVaultNotePayload(note: ParsedVaultNote): VaultNotePayload {
+function toVaultNotePayload(note: ParsedVaultNote, backlinks: VaultBacklink[]): VaultNotePayload {
   return {
     id: note.id,
     relPath: note.relPath,
@@ -157,6 +166,128 @@ function toVaultNotePayload(note: ParsedVaultNote): VaultNotePayload {
     frontmatter: note.frontmatter,
     body: note.body,
     outgoingLinks: note.outgoingLinks,
+    backlinks,
+  }
+}
+
+function compareStrings(left: string, right: string): number {
+  if (left < right) {
+    return -1
+  }
+
+  if (left > right) {
+    return 1
+  }
+
+  return 0
+}
+
+function compareReason(left: VaultRelatedReason, right: VaultRelatedReason): number {
+  const weight: Record<VaultRelatedReason, number> = {
+    outgoing: 1,
+    backlink: 2,
+    'shared-folder': 3,
+  }
+
+  return weight[left] - weight[right]
+}
+
+function getParentFolder(relPath: string): string {
+  const parent = path.posix.dirname(relPath)
+  return parent === '.' ? '' : parent
+}
+
+function getNoteBacklinks(index: LoadedVaultIndex, relPath: string): VaultBacklink[] {
+  return index.backlinksByTargetRelPath.get(relPath) ?? []
+}
+
+function getNoteNeighborhood(index: LoadedVaultIndex, note: ParsedVaultNote): VaultNoteNeighborhood {
+  const outgoing = index.resolvedOutgoingBySourceRelPath.get(note.relPath) ?? []
+  const backlinks = getNoteBacklinks(index, note.relPath)
+  const unresolvedOutgoing = index.unresolvedOutgoingBySourceRelPath.get(note.relPath) ?? []
+  const related = new Map<string, { score: number; reasons: Set<VaultRelatedReason> }>()
+
+  const pushReason = (relPath: string, score: number, reason: VaultRelatedReason) => {
+    if (relPath === note.relPath) {
+      return
+    }
+
+    const existing = related.get(relPath)
+    if (existing) {
+      existing.score += score
+      existing.reasons.add(reason)
+      return
+    }
+
+    related.set(relPath, {
+      score,
+      reasons: new Set([reason]),
+    })
+  }
+
+  for (const link of outgoing) {
+    pushReason(link.targetRelPath, 2, 'outgoing')
+  }
+
+  for (const backlink of backlinks) {
+    pushReason(backlink.sourceRelPath, 2, 'backlink')
+  }
+
+  const noteFolder = getParentFolder(note.relPath)
+  for (const candidate of index.notes) {
+    if (candidate.relPath === note.relPath) {
+      continue
+    }
+
+    if (getParentFolder(candidate.relPath) === noteFolder) {
+      pushReason(candidate.relPath, 1, 'shared-folder')
+    }
+  }
+
+  const relatedNotes = [...related.entries()]
+    .flatMap(([relPath, data]) => {
+      const candidate = index.byRelPath.get(relPath)
+      if (!candidate) {
+        return []
+      }
+
+      return [
+        {
+          relPath: candidate.relPath,
+          slug: candidate.slug,
+          title: candidate.title,
+          connectionCount: data.score,
+          reasons: [...data.reasons].sort(compareReason),
+        },
+      ]
+    })
+    .sort((left, right) => {
+      if (left.connectionCount !== right.connectionCount) {
+        return right.connectionCount - left.connectionCount
+      }
+
+      const titleOrder = compareStrings(left.title, right.title)
+      if (titleOrder !== 0) {
+        return titleOrder
+      }
+
+      return compareStrings(left.relPath, right.relPath)
+    })
+
+  return {
+    note: {
+      relPath: note.relPath,
+      slug: note.slug,
+      title: note.title,
+    },
+    outgoing,
+    backlinks,
+    relatedNotes,
+    stats: {
+      outgoingResolvedCount: outgoing.length,
+      backlinkCount: backlinks.length,
+      unresolvedOutgoingCount: unresolvedOutgoing.length,
+    },
   }
 }
 
@@ -312,7 +443,7 @@ export async function getNoteBySlug(slug: string): Promise<VaultSlugLookup | nul
   return {
     builtAt: index.builtAt,
     collisions: index.slugCollisions.get(normalizedSlug) ?? [],
-    note: toVaultNotePayload(note),
+    note: toVaultNotePayload(note, getNoteBacklinks(index, note.relPath)),
   }
 }
 
@@ -327,8 +458,20 @@ export async function getNoteByPath(relPath: string): Promise<VaultPathLookup | 
 
   return {
     builtAt: index.builtAt,
-    note: toVaultNotePayload(note),
+    note: toVaultNotePayload(note, getNoteBacklinks(index, note.relPath)),
   }
+}
+
+export async function getNoteNeighborhoodByPath(relPath: string): Promise<VaultNoteNeighborhood | null> {
+  const normalizedPath = normalizeVaultPath(relPath)
+  const index = await getVaultIndex()
+  const note = index.byRelPath.get(normalizedPath)
+
+  if (!note) {
+    return null
+  }
+
+  return getNoteNeighborhood(index, note)
 }
 
 export async function getVaultTree(): Promise<VaultFolderTreeNode> {
@@ -600,6 +743,40 @@ export async function getVaultNoteByPathResponse(pathInput: string | null | unde
   return Response.json(found)
 }
 
+export async function getVaultNoteNeighborhoodResponse(pathInput: string | null | undefined): Promise<Response> {
+  let normalizedPath: string
+
+  try {
+    normalizedPath = normalizeNotePathInput(pathInput)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: pathInput ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const index = await getVaultIndex()
+  const note = index.byRelPath.get(normalizedPath)
+
+  if (!note) {
+    return Response.json(
+      {
+        error: 'Note not found',
+        path: normalizedPath,
+      },
+      { status: 404 },
+    )
+  }
+
+  return Response.json({
+    builtAt: index.builtAt,
+    ...getNoteNeighborhood(index, note),
+  })
+}
+
 export function __resetVaultServiceForTests() {
   cachedIndex = null
   inFlightBuild = null
@@ -610,6 +787,7 @@ export type {
   VaultFolderListing,
   VaultBrowseData,
   VaultIndexStats,
+  VaultNoteNeighborhood,
   VaultIndexSummaryNote,
   VaultNotePayload,
   VaultPathLookup,
