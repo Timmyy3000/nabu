@@ -20,7 +20,7 @@ const loadVaultBrowse = createServerFn({ method: 'GET' })
   )
 
 const loadVaultSearch = createServerFn({ method: 'GET' })
-  .inputValidator((input: { q: string; searchPath: string }) => input)
+  .inputValidator((input: { q: string; searchPath: string; searchTag: string }) => input)
   .handler(async ({ data }) => {
     if (!data.q.trim()) {
       return null
@@ -29,6 +29,7 @@ const loadVaultSearch = createServerFn({ method: 'GET' })
     return searchVaultNotes({
       query: data.q,
       path: data.searchPath,
+      tag: data.searchTag,
     })
   })
 
@@ -50,12 +51,14 @@ export const Route = createFileRoute('/')({
     note: typeof search.note === 'string' ? search.note : '',
     q: typeof search.q === 'string' ? search.q : '',
     searchPath: typeof search.searchPath === 'string' ? search.searchPath : '',
+    searchTag: typeof search.searchTag === 'string' ? search.searchTag : '',
   }),
   loaderDeps: ({ search }) => ({
     folder: search.folder,
     note: search.note,
     q: search.q,
     searchPath: search.searchPath,
+    searchTag: search.searchTag,
   }),
   loader: async ({ deps }) => {
     const browse = await loadVaultBrowse({
@@ -69,6 +72,7 @@ export const Route = createFileRoute('/')({
       data: {
         q: deps.q,
         searchPath: deps.searchPath,
+        searchTag: deps.searchTag,
       },
     })
 
@@ -76,6 +80,7 @@ export const Route = createFileRoute('/')({
       browse,
       search,
       searchPathInput: deps.searchPath,
+      searchTagInput: deps.searchTag,
     }
   },
   component: RouteComponent,
@@ -83,5 +88,12 @@ export const Route = createFileRoute('/')({
 
 function RouteComponent() {
   const data = Route.useLoaderData()
-  return <HomePage browse={data.browse} search={data.search} searchPathInput={data.searchPathInput} />
+  return (
+    <HomePage
+      browse={data.browse}
+      search={data.search}
+      searchPathInput={data.searchPathInput}
+      searchTagInput={data.searchTagInput}
+    />
+  )
 }

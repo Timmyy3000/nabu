@@ -52,13 +52,13 @@ describe('GET /api/vault/search', () => {
 
   it('returns search results when request is authenticated', async () => {
     await createVaultFixture({
-      'ideas/agent-memory.md': '# Agent Memory',
+      'ideas/agent-memory.md': '---\ntags: [ai]\n---\n# Agent Memory',
     })
 
     const handler = Route.options.server.handlers.GET
     const session = createSessionToken()
     const response = await handler({
-      request: new Request('http://localhost:3000/api/vault/search?q=agent', {
+      request: new Request('http://localhost:3000/api/vault/search?q=agent&tag=ai', {
         headers: {
           cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
         },
@@ -70,6 +70,9 @@ describe('GET /api/vault/search', () => {
     expect(payload).toMatchObject({
       query: 'agent',
       normalizedQuery: 'agent',
+      exactPhrases: [],
+      tokens: ['agent'],
+      tag: 'ai',
       total: 1,
       results: [{ relPath: 'ideas/agent-memory.md' }],
     })

@@ -361,6 +361,7 @@ describe('vault retrieval contracts', () => {
     const response = await getVaultSearchResponse({
       query: 'agent',
       path: '',
+      tag: null,
       limit: '1',
       offset: '0',
     })
@@ -371,7 +372,10 @@ describe('vault retrieval contracts', () => {
       builtAt: expect.any(String),
       query: 'agent',
       normalizedQuery: 'agent',
+      exactPhrases: [],
+      tokens: ['agent'],
       path: '',
+      tag: null,
       limit: 1,
       offset: 0,
       total: 2,
@@ -392,6 +396,31 @@ describe('vault retrieval contracts', () => {
     })
   })
 
+  it('applies tag filter from search API input', async () => {
+    await createVaultFixture({
+      'ideas/agent-memory.md': '---\ntitle: Agent Memory\ntags: [ai]\n---\nBody',
+      'ideas/agent-runtime.md': '---\ntitle: Agent Runtime\ntags: [systems]\n---\nBody',
+    })
+
+    const response = await getVaultSearchResponse({
+      query: 'agent',
+      path: '',
+      tag: 'AI',
+      limit: null,
+      offset: null,
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      query: 'agent',
+      normalizedQuery: 'agent',
+      tag: 'ai',
+      total: 1,
+      results: [{ relPath: 'ideas/agent-memory.md' }],
+    })
+  })
+
   it('returns 400 for empty search query', async () => {
     await createVaultFixture({
       'ideas/agent-memory.md': '# Agent Memory',
@@ -400,6 +429,7 @@ describe('vault retrieval contracts', () => {
     const response = await getVaultSearchResponse({
       query: '   ',
       path: '',
+      tag: null,
       limit: null,
       offset: null,
     })
@@ -419,6 +449,7 @@ describe('vault retrieval contracts', () => {
     const response = await getVaultSearchResponse({
       query: 'agent',
       path: 'projects',
+      tag: null,
       limit: null,
       offset: null,
     })

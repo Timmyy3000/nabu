@@ -9,6 +9,7 @@ import {
   normalizeSearchLimit,
   normalizeSearchOffset,
   normalizeSearchQuery,
+  normalizeSearchTag,
   searchVaultIndex,
   type VaultSearchResponse,
 } from './search'
@@ -81,6 +82,7 @@ type VaultBrowseData = {
 type VaultSearchInput = {
   query: string
   path?: string | null
+  tag?: string | null
   limit?: number | null
   offset?: number | null
 }
@@ -569,6 +571,7 @@ export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSe
   }
 
   const normalizedPath = normalizeSearchPath(input.path)
+  const normalizedTag = normalizeSearchTag(input.tag)
   const limit = normalizeSearchLimit(input.limit)
   const offset = normalizeSearchOffset(input.offset)
   const index = await getVaultIndex()
@@ -577,6 +580,7 @@ export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSe
     notes: index.notes,
     query: queryData.query,
     path: normalizedPath,
+    tag: normalizedTag,
     limit,
     offset,
   })
@@ -585,6 +589,7 @@ export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSe
 export async function getVaultSearchResponse(input: {
   query: string | null | undefined
   path: string | null | undefined
+  tag: string | null | undefined
   limit: string | null | undefined
   offset: string | null | undefined
 }): Promise<Response> {
@@ -619,6 +624,7 @@ export async function getVaultSearchResponse(input: {
   const result = await searchVaultNotes({
     query: rawQuery,
     path: normalizedPath,
+    tag: input.tag,
     limit: Number.isNaN(parsedLimit) ? null : parsedLimit,
     offset: Number.isNaN(parsedOffset) ? null : parsedOffset,
   })

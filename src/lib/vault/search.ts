@@ -29,7 +29,10 @@ export type VaultSearchResult = {
 export type VaultSearchResponse = {
   query: string
   normalizedQuery: string
+  exactPhrases: string[]
+  tokens: string[]
   path: string
+  tag: string | null
   limit: number
   offset: number
   total: number
@@ -41,6 +44,7 @@ export type SearchVaultIndexInput = {
   notes: ParsedVaultNote[]
   query: string
   path: string
+  tag: string | null
   limit: number
   offset: number
 }
@@ -48,17 +52,42 @@ export type SearchVaultIndexInput = {
 export function normalizeSearchQuery(query: string): {
   query: string
   normalizedQuery: string
+  exactPhrases: string[]
   tokens: string[]
 } {
   const cleanedQuery = query.trim()
-  const normalizedQuery = normalizeSearchText(cleanedQuery)
-  const tokens = normalizedQuery.split(' ').filter(Boolean)
+  const hasBalancedQuotes = ((cleanedQuery.match(/"/g) ?? []).length & 1) === 0
+  const exactPhrases: string[] = []
+
+  let unquotedRemainder = cleanedQuery
+  if (hasBalancedQuotes) {
+    unquotedRemainder = cleanedQuery.replace(/"([^"]*)"/g, (_full, quoted: string) => {
+      const normalizedPhrase = normalizeSearchText(quoted)
+      if (normalizedPhrase) {
+        exactPhrases.push(normalizedPhrase)
+      }
+      return ' '
+    })
+  }
+
+  const normalizedQuery = normalizeSearchText(cleanedQuery.replace(/"/g, ' '))
+  const tokens = normalizeSearchText(unquotedRemainder).split(' ').filter(Boolean)
 
   return {
     query: cleanedQuery,
     normalizedQuery,
+    exactPhrases,
     tokens,
   }
+}
+
+export function normalizeSearchTag(tagInput: string | null | undefined): string | null {
+  if (tagInput == null) {
+    return null
+  }
+
+  const normalizedTag = normalizeSearchText(tagInput)
+  return normalizedTag || null
 }
 
 export function normalizeSearchLimit(limitInput: number | null | undefined): number {
@@ -150,9 +179,27 @@ function truncateSnippet(source: string, startIndex: number): string {
   return excerpt
 }
 
-function buildSnippet(note: ParsedVaultNote, normalizedQuery: string, tokens: string[]): string {
+function buildSnippet(
+  note: ParsedVaultNote,
+  normalizedQuery: string,
+  tokens: string[],
+  exactPhrases: string[],
+): string {
   const summaryText = (note.summary ?? '').replace(/\s+/g, ' ').trim()
   const bodyText = note.body.replace(/\s+/g, ' ').trim()
+
+  for (const phrase of exactPhrases) {
+    const phraseRegex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+    const summaryPhraseMatch = summaryText.match(phraseRegex)
+    if (summaryPhraseMatch && summaryPhraseMatch.index != null) {
+      return truncateSnippet(summaryText, summaryPhraseMatch.index)
+    }
+
+    const bodyPhraseMatch = bodyText.match(phraseRegex)
+    if (bodyPhraseMatch && bodyPhraseMatch.index != null) {
+      return truncateSnippet(bodyText, bodyPhraseMatch.index)
+    }
+  }
 
   if (normalizedQuery) {
     const phraseRegex = new RegExp(normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
@@ -206,16 +253,32 @@ function compareSearchResults(left: VaultSearchResult, right: VaultSearchResult)
 function scoreNote(input: {
   note: ParsedVaultNote
   normalizedQuery: string
+  exactPhrases: string[]
   tokens: string[]
   pathScope: string
+  tag: string | null
 }): VaultSearchResult | null {
-  const { note, normalizedQuery, tokens, pathScope } = input
+  const { note, normalizedQuery, exactPhrases, tokens, pathScope, tag } = input
 
   const normalizedSlug = normalizeSearchText(note.slug)
   const normalizedTitle = normalizeSearchText(note.title)
   const normalizedSummary = normalizeSearchText(note.summary ?? '')
   const normalizedBody = normalizeSearchText(note.body)
   const normalizedTags = note.tags.map((tag) => normalizeSearchText(tag))
+
+  if (tag && !normalizedTags.includes(tag)) {
+    return null
+  }
+
+  if (exactPhrases.length > 0) {
+    const phraseSources = [normalizedSlug, normalizedTitle, normalizedSummary, normalizedBody]
+    const hasAllExactPhrases = exactPhrases.every((phrase) =>
+      phraseSources.some((source) => source.includes(phrase)),
+    )
+    if (!hasAllExactPhrases) {
+      return null
+    }
+  }
 
   let score = 0
   const reasons: SearchReason[] = []
@@ -241,8 +304,10 @@ function scoreNote(input: {
   }
 
   const phraseMatchInSummaryOrBody =
-    normalizedQuery.length > 0 &&
-    (normalizedSummary.includes(normalizedQuery) || normalizedBody.includes(normalizedQuery))
+    exactPhrases.length > 0
+      ? exactPhrases.some((phrase) => normalizedSummary.includes(phrase) || normalizedBody.includes(phrase))
+      : normalizedQuery.length > 0 &&
+        (normalizedSummary.includes(normalizedQuery) || normalizedBody.includes(normalizedQuery))
   if (phraseMatchInSummaryOrBody) {
     score += 50
     reasons.push('phrase')
@@ -291,12 +356,13 @@ function scoreNote(input: {
     tags: note.tags,
     score,
     reasons,
-    snippet: buildSnippet(note, normalizedQuery, tokens),
+    snippet: buildSnippet(note, normalizedQuery, tokens, exactPhrases),
   }
 }
 
 export function searchVaultIndex(input: SearchVaultIndexInput): VaultSearchResponse {
   const queryData = normalizeSearchQuery(input.query)
+  const normalizedTag = normalizeSearchTag(input.tag)
 
   const scopedNotes = input.path
     ? pathScopeExists(input.notes, input.path)
@@ -309,8 +375,10 @@ export function searchVaultIndex(input: SearchVaultIndexInput): VaultSearchRespo
       scoreNote({
         note,
         normalizedQuery: queryData.normalizedQuery,
+        exactPhrases: queryData.exactPhrases,
         tokens: queryData.tokens,
         pathScope: input.path,
+        tag: normalizedTag,
       }),
     )
     .filter((entry): entry is VaultSearchResult => entry !== null)
@@ -322,7 +390,10 @@ export function searchVaultIndex(input: SearchVaultIndexInput): VaultSearchRespo
   return {
     query: queryData.query,
     normalizedQuery: queryData.normalizedQuery,
+    exactPhrases: queryData.exactPhrases,
+    tokens: queryData.tokens,
     path: input.path,
+    tag: normalizedTag,
     limit: input.limit,
     offset: input.offset,
     total,

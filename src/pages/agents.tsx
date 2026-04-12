@@ -33,7 +33,7 @@ export function AgentsPage() {
           <code>GET /api/vault/notes/by-path?path=</code>: deterministic note lookup by canonical vault-relative path (`note`, `builtAt`).
         </li>
         <li>
-          <code>GET /api/vault/search?q=&amp;path=&amp;limit=&amp;offset=</code>: lexical search over note metadata and body.
+          <code>GET /api/vault/search?q=&amp;path=&amp;tag=&amp;limit=&amp;offset=</code>: lexical search over note metadata and body.
         </li>
       </ul>
 

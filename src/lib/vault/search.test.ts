@@ -1,10 +1,45 @@
 import { describe, expect, it } from 'vitest'
 import { parseNote, type ParsedVaultNote } from './parse-note'
-import { searchVaultIndex } from './search'
+import { normalizeSearchQuery, searchVaultIndex } from './search'
 
 function note(relPath: string, rawMarkdown: string): ParsedVaultNote {
   return parseNote({ relPath, rawMarkdown })
 }
+
+describe('normalizeSearchQuery', () => {
+  it('parses plain lexical queries into tokens', () => {
+    expect(normalizeSearchQuery(' Agent   Memory ')).toMatchObject({
+      query: 'Agent   Memory',
+      normalizedQuery: 'agent memory',
+      exactPhrases: [],
+      tokens: ['agent', 'memory'],
+    })
+  })
+
+  it('parses balanced quoted phrases as exact phrases', () => {
+    expect(normalizeSearchQuery('deploy "bind mount" dokploy')).toMatchObject({
+      normalizedQuery: 'deploy bind mount dokploy',
+      exactPhrases: ['bind mount'],
+      tokens: ['deploy', 'dokploy'],
+    })
+  })
+
+  it('supports phrase-only queries', () => {
+    expect(normalizeSearchQuery('"password auth"')).toMatchObject({
+      normalizedQuery: 'password auth',
+      exactPhrases: ['password auth'],
+      tokens: [],
+    })
+  })
+
+  it('falls back to lexical tokenization for malformed quotes', () => {
+    expect(normalizeSearchQuery('deploy "bind mount dokploy')).toMatchObject({
+      normalizedQuery: 'deploy bind mount dokploy',
+      exactPhrases: [],
+      tokens: ['deploy', 'bind', 'mount', 'dokploy'],
+    })
+  })
+})
 
 describe('searchVaultIndex', () => {
   it('ranks exact slug matches above title/body-only matches', () => {
@@ -15,6 +50,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'dokploy',
       path: '',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -31,6 +67,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'agent memory',
       path: '',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -47,6 +84,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'password auth',
       path: '',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -65,6 +103,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'alpha zeta beta gamma delta epsilon',
       path: '',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -82,6 +121,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'alpha',
       path: 'ideas',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -90,11 +130,66 @@ describe('searchVaultIndex', () => {
     expect(results.results[0]?.reasons).toContain('path-scope')
   })
 
+  it('treats exact phrases as hard constraints', () => {
+    const results = searchVaultIndex({
+      notes: [
+        note('ideas/one.md', '---\ntitle: Deploy note\nsummary: We use bind mount for local data.\n---\nDokploy setup'),
+        note('ideas/two.md', '---\ntitle: Deploy note\nsummary: Local data strategy.\n---\nDokploy setup'),
+      ],
+      query: 'dokploy "bind mount"',
+      path: '',
+      tag: null,
+      limit: 20,
+      offset: 0,
+    })
+
+    expect(results.total).toBe(1)
+    expect(results.results.map((entry) => entry.relPath)).toEqual(['ideas/one.md'])
+    expect(results.exactPhrases).toEqual(['bind mount'])
+    expect(results.tokens).toEqual(['dokploy'])
+  })
+
+  it('filters by exact normalized tag when tag filter is provided', () => {
+    const results = searchVaultIndex({
+      notes: [
+        note('ideas/a.md', '---\ntitle: Agent Memory\ntags: [AI, memory]\n---\nagent'),
+        note('ideas/b.md', '---\ntitle: Agent Runtime\ntags: [systems]\n---\nagent'),
+      ],
+      query: 'agent',
+      path: '',
+      tag: 'AI',
+      limit: 20,
+      offset: 0,
+    })
+
+    expect(results.total).toBe(1)
+    expect(results.tag).toBe('ai')
+    expect(results.results.map((entry) => entry.relPath)).toEqual(['ideas/a.md'])
+  })
+
+  it('combines path and tag filters deterministically', () => {
+    const results = searchVaultIndex({
+      notes: [
+        note('ideas/a.md', '---\ntitle: Agent Memory\ntags: [ai]\n---\nagent'),
+        note('projects/a.md', '---\ntitle: Agent Memory\ntags: [ai]\n---\nagent'),
+      ],
+      query: 'agent',
+      path: 'ideas',
+      tag: 'ai',
+      limit: 20,
+      offset: 0,
+    })
+
+    expect(results.total).toBe(1)
+    expect(results.results.map((entry) => entry.relPath)).toEqual(['ideas/a.md'])
+  })
+
   it('returns empty results for unknown path scope', () => {
     const results = searchVaultIndex({
       notes: [note('ideas/a.md', '# A')],
       query: 'a',
       path: 'missing',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -113,6 +208,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'password auth',
       path: '',
+      tag: null,
       limit: 20,
       offset: 0,
     })
@@ -130,6 +226,7 @@ describe('searchVaultIndex', () => {
       ],
       query: 'token',
       path: '',
+      tag: null,
       limit: 20,
       offset: 0,
     })

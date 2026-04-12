@@ -13,6 +13,7 @@ vi.mock('@tanstack/react-router', () => ({
       note: 'prev-note',
       q: 'prev-q',
       searchPath: 'prev-path',
+      searchTag: 'prev-tag',
     }
     const nextSearch = typeof search === 'function' ? search(previousSearch) : null
 
@@ -81,7 +82,7 @@ function buildBrowseFixture() {
 
 describe('HomePage', () => {
   it('renders browse UI when no query is active', () => {
-    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" />)
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
     expect(screen.getByRole('heading', { name: /knowledge vault/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /ideas/i })).toBeInTheDocument()
@@ -96,7 +97,10 @@ describe('HomePage', () => {
         search={{
           query: 'agent memory',
           normalizedQuery: 'agent memory',
+          exactPhrases: [],
+          tokens: ['agent', 'memory'],
           path: 'ideas',
+          tag: null,
           limit: 20,
           offset: 0,
           total: 1,
@@ -116,6 +120,7 @@ describe('HomePage', () => {
           ],
         }}
         searchPathInput="ideas"
+        searchTagInput=""
       />,
     )
 
@@ -132,7 +137,10 @@ describe('HomePage', () => {
         search={{
           query: 'agent',
           normalizedQuery: 'agent',
+          exactPhrases: [],
+          tokens: ['agent'],
           path: '',
+          tag: null,
           limit: 20,
           offset: 0,
           total: 0,
@@ -140,6 +148,7 @@ describe('HomePage', () => {
           results: [],
         }}
         searchPathInput=""
+        searchTagInput=""
       />,
     )
 
@@ -153,7 +162,10 @@ describe('HomePage', () => {
         search={{
           query: 'agent memory',
           normalizedQuery: 'agent memory',
+          exactPhrases: [],
+          tokens: ['agent', 'memory'],
           path: 'ideas',
+          tag: null,
           limit: 20,
           offset: 0,
           total: 1,
@@ -173,6 +185,7 @@ describe('HomePage', () => {
           ],
         }}
         searchPathInput="ideas"
+        searchTagInput=""
       />,
     )
 
@@ -182,6 +195,7 @@ describe('HomePage', () => {
       note: 'alpha',
       q: '',
       searchPath: '',
+      searchTag: '',
     })
   })
 
@@ -192,7 +206,10 @@ describe('HomePage', () => {
         search={{
           query: 'agent',
           normalizedQuery: 'agent',
+          exactPhrases: [],
+          tokens: ['agent'],
           path: 'ideas',
+          tag: null,
           limit: 20,
           offset: 0,
           total: 0,
@@ -200,6 +217,7 @@ describe('HomePage', () => {
           results: [],
         }}
         searchPathInput="ideas"
+        searchTagInput=""
       />,
     )
 
@@ -209,6 +227,7 @@ describe('HomePage', () => {
       note: '',
       q: '',
       searchPath: '',
+      searchTag: '',
     })
   })
 
@@ -228,9 +247,16 @@ describe('HomePage', () => {
         }}
         search={null}
         searchPathInput=""
+        searchTagInput=""
       />,
     )
 
     expect(screen.getByText('No notes in this folder yet.')).toBeInTheDocument()
+  })
+
+  it('renders an optional tag filter input', () => {
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="ai" />)
+
+    expect(screen.getByLabelText('Tag (optional)')).toHaveValue('ai')
   })
 })

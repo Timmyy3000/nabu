@@ -16,6 +16,7 @@ export const Route = createFileRoute('/api/vault/search')({
         return getVaultSearchResponse({
           query: url.searchParams.get('q'),
           path: url.searchParams.get('path'),
+          tag: url.searchParams.get('tag'),
           limit: url.searchParams.get('limit'),
           offset: url.searchParams.get('offset'),
         })

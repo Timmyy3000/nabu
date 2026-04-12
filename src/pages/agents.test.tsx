@@ -17,6 +17,6 @@ describe('AgentsPage', () => {
     expect(screen.getByText('GET /api/vault/folders?path=')).toBeInTheDocument()
     expect(screen.getByText('GET /api/vault/notes/$slug')).toBeInTheDocument()
     expect(screen.getByText('GET /api/vault/notes/by-path?path=')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/search?q=&path=&limit=&offset=')).toBeInTheDocument()
+    expect(screen.getByText('GET /api/vault/search?q=&path=&tag=&limit=&offset=')).toBeInTheDocument()
   })
 })

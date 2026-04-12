@@ -17,10 +17,12 @@ export function HomePage({
   browse,
   search,
   searchPathInput,
+  searchTagInput,
 }: {
   browse: VaultBrowseData
   search: VaultSearchResponse | null
   searchPathInput: string
+  searchTagInput: string
 }) {
   const folderTitle = browse.folder.path || 'Root'
   const searchActive = search?.normalizedQuery ? true : false
@@ -30,7 +32,7 @@ export function HomePage({
       <li key={node.path || 'root'}>
         <Link
           to="/"
-          search={(prev) => ({ ...prev, folder: node.path, note: '', q: '', searchPath: '' })}
+          search={(prev) => ({ ...prev, folder: node.path, note: '', q: '', searchPath: '', searchTag: '' })}
           className={node.path === browse.folder.path ? 'is-active' : undefined}
         >
           {node.name || 'Root'} <span className="muted">({node.noteCount})</span>
@@ -60,8 +62,11 @@ export function HomePage({
             defaultValue={searchPathInput}
             placeholder={browse.folder.path || 'whole vault'}
           />
+          <label htmlFor="vault-search-tag">Tag (optional)</label>
+          <input id="vault-search-tag" name="searchTag" defaultValue={searchTagInput} placeholder="e.g. ai" />
           <input type="hidden" name="folder" value={browse.folder.path} />
           <input type="hidden" name="note" value={browse.selectedNoteSlug ?? ''} />
+          <p className="muted">Use quotes for exact phrases, e.g. "bind mount".</p>
           <div className="search-actions">
             <button type="submit">Search</button>
             {searchActive ? (
@@ -71,6 +76,7 @@ export function HomePage({
                   ...prev,
                   q: '',
                   searchPath: '',
+                  searchTag: '',
                 })}
               >
                 Clear
@@ -88,6 +94,7 @@ export function HomePage({
             <p className="muted">
               {search.total} result{search.total === 1 ? '' : 's'}
               {search.path ? ` in ${search.path}` : ''}
+              {search.tag ? ` tagged ${search.tag}` : ''}
             </p>
             <ul className="note-list search-results">
               {search.results.map((result) => (
@@ -100,6 +107,7 @@ export function HomePage({
                       note: result.slug,
                       q: '',
                       searchPath: '',
+                      searchTag: '',
                     })}
                   >
                     {result.title}
