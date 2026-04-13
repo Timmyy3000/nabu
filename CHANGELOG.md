@@ -2,6 +2,21 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.3.0] - 2026-04-13
+
+Workspace polish release.
+
+### Shipped
+
+- Obsidian-inspired workspace overhaul with a darker, denser, calmer reading interface
+- Stronger pane hierarchy across navigation, note list/search, and note content
+- Improved markdown presentation for headings, code blocks, blockquotes, and note metadata
+- CI reliability fix by syncing `package-lock.json` with the release version bump
+
+### Why it matters
+
+Nabu now feels much closer to a real knowledge workspace instead of a generic web dashboard. The reading surface has more authority, the side rails are calmer, and the hosted branch release process is back in a clean state after the CI lockfile fix.
+
 ## [0.2.0] - 2026-04-13
 
 Agent-operability release.
