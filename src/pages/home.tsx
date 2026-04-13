@@ -43,8 +43,8 @@ export function HomePage({
   }
 
   return (
-    <div className="vault-layout">
-      <aside className="vault-sidebar panel">
+    <div className="vault-layout vault-workspace panel">
+      <aside className="vault-pane vault-pane-nav vault-sidebar">
         <p className="eyebrow">Nabu</p>
         <p>
           <a href="/logout" className="logout-link">
@@ -52,18 +52,24 @@ export function HomePage({
           </a>
         </p>
         <h1>Knowledge Vault</h1>
-        <form method="get" action="/" className="search-form">
-          <label htmlFor="vault-search-input">Search notes</label>
-          <input id="vault-search-input" name="q" defaultValue={search?.query ?? ''} placeholder="Search vault..." />
-          <label htmlFor="vault-search-path">Scope path (optional)</label>
-          <input
-            id="vault-search-path"
-            name="searchPath"
-            defaultValue={searchPathInput}
-            placeholder={browse.folder.path || 'whole vault'}
-          />
-          <label htmlFor="vault-search-tag">Tag (optional)</label>
-          <input id="vault-search-tag" name="searchTag" defaultValue={searchTagInput} placeholder="e.g. ai" />
+        <form method="get" action="/" className="search-form search-form-compact">
+          <div className="search-field">
+            <label htmlFor="vault-search-input">Search notes</label>
+            <input id="vault-search-input" name="q" defaultValue={search?.query ?? ''} placeholder="Search vault..." />
+          </div>
+          <div className="search-field">
+            <label htmlFor="vault-search-path">Scope path (optional)</label>
+            <input
+              id="vault-search-path"
+              name="searchPath"
+              defaultValue={searchPathInput}
+              placeholder={browse.folder.path || 'whole vault'}
+            />
+          </div>
+          <div className="search-field">
+            <label htmlFor="vault-search-tag">Tag (optional)</label>
+            <input id="vault-search-tag" name="searchTag" defaultValue={searchTagInput} placeholder="e.g. ai" />
+          </div>
           <input type="hidden" name="folder" value={browse.folder.path} />
           <input type="hidden" name="note" value={browse.selectedNoteSlug ?? ''} />
           <p className="muted">Use quotes for exact phrases, e.g. "bind mount".</p>
@@ -87,7 +93,7 @@ export function HomePage({
         <ul className="tree-list">{renderTreeNode(browse.tree)}</ul>
       </aside>
 
-      <section className="vault-list panel">
+      <section className="vault-pane vault-pane-list vault-list">
         {searchActive && search ? (
           <>
             <h2>Search</h2>
@@ -98,7 +104,7 @@ export function HomePage({
             </p>
             <ul className="note-list search-results">
               {search.results.map((result) => (
-                <li key={result.id}>
+                <li key={result.id} className="note-row">
                   <Link
                     to="/"
                     search={(prev) => ({
@@ -126,7 +132,7 @@ export function HomePage({
             {browse.folder.notes.length > 0 ? (
               <ul className="note-list">
                 {browse.folder.notes.map((note) => (
-                  <li key={note.id}>
+                  <li key={note.id} className="note-row">
                     <Link
                       to="/"
                       search={(prev) => ({
@@ -148,17 +154,21 @@ export function HomePage({
         )}
       </section>
 
-      <article className="vault-note panel">
+      <article className="vault-pane vault-pane-note vault-note">
         {browse.note ? (
           <>
-            <h2>{browse.note.title}</h2>
-            <p className="muted">{browse.note.relPath}</p>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{browse.note.body}</ReactMarkdown>
+            <header className="note-head">
+              <h2>{browse.note.title}</h2>
+              <p className="muted note-meta">{browse.note.relPath}</p>
+            </header>
+            <div className="note-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{browse.note.body}</ReactMarkdown>
+            </div>
           </>
         ) : (
           <>
             <h2>No note selected</h2>
-            <p className="muted">Select a note from the list to start browsing.</p>
+            <p className="muted note-meta">Select a note from the list to start browsing.</p>
           </>
         )}
       </article>

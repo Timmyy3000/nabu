@@ -82,12 +82,16 @@ function buildBrowseFixture() {
 
 describe('HomePage', () => {
   it('renders browse UI when no query is active', () => {
-    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+    const { container } = render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
     expect(screen.getByRole('heading', { name: /knowledge vault/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /ideas/i })).toBeInTheDocument()
     expect(screen.getByText('ideas/alpha.md')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Alpha' })).toBeInTheDocument()
+    expect(container.querySelector('.vault-workspace')).toBeTruthy()
+    expect(container.querySelectorAll('.vault-pane')).toHaveLength(3)
+    expect(container.querySelector('.vault-pane-note')).toBeTruthy()
+    expect(screen.getByText('ideas/alpha.md').closest('.note-meta')).toBeTruthy()
   })
 
   it('renders search results when query is present', () => {
