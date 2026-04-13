@@ -1,21 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { createVaultFolderResponse, getVaultFolderListingResponse } from '../../../lib/vault/service'
+import { getVaultNoteByPathResponse, updateVaultNoteByPathResponse } from '../../../../lib/vault/service'
 
-export const Route = createFileRoute('/api/vault/folders')({
+export const Route = createFileRoute('/api/vault/notes/by-path')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
+        const { requireAuthenticatedApiRequest } = await import('../../../../lib/auth/session')
         const unauthorizedResponse = requireAuthenticatedApiRequest(request)
         if (unauthorizedResponse) {
           return unauthorizedResponse
         }
 
         const url = new URL(request.url)
-        return getVaultFolderListingResponse(url.searchParams.get('path'))
+        return getVaultNoteByPathResponse(url.searchParams.get('path'))
       },
-      POST: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
+      PUT: async ({ request }) => {
+        const { requireAuthenticatedApiRequest } = await import('../../../../lib/auth/session')
         const unauthorizedResponse = requireAuthenticatedApiRequest(request)
         if (unauthorizedResponse) {
           return unauthorizedResponse
@@ -34,8 +34,11 @@ export const Route = createFileRoute('/api/vault/folders')({
           )
         }
 
-        const payload = body as { path?: string | null }
-        return createVaultFolderResponse({ path: payload.path ?? null })
+        const payload = body as { path?: string | null; rawMarkdown?: string | null }
+        return updateVaultNoteByPathResponse({
+          path: payload.path ?? null,
+          rawMarkdown: payload.rawMarkdown ?? null,
+        })
       },
     },
   },

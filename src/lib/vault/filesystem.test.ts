@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { listMarkdownFiles } from './filesystem'
+import {
+  createVaultFolder,
+  createVaultMarkdownFile,
+  listMarkdownFiles,
+  updateVaultMarkdownFile,
+  VaultFileAlreadyExistsError,
+  VaultFileNotFoundError,
+} from './filesystem'
 
 const tempRoots: string[] = []
 
@@ -61,5 +68,43 @@ describe('listMarkdownFiles', () => {
     const files = await listMarkdownFiles(rootPath)
 
     expect(files).not.toContain('linked-outside/secret.md')
+  })
+})
+
+describe('vault write primitives', () => {
+  it('creates nested folders and reports whether they were created', async () => {
+    const rootPath = await createVaultFixture()
+
+    await expect(createVaultFolder(rootPath, 'projects/nabu/specs')).resolves.toBe(true)
+    await expect(createVaultFolder(rootPath, 'projects/nabu/specs')).resolves.toBe(false)
+
+    const folderStat = await stat(path.join(rootPath, 'projects', 'nabu', 'specs'))
+    expect(folderStat.isDirectory()).toBe(true)
+  })
+
+  it('creates markdown files without overwriting existing files', async () => {
+    const rootPath = await createVaultFixture()
+    const relPath = 'projects/nabu/specs/agent-operability.md'
+
+    await createVaultMarkdownFile(rootPath, relPath, '# Agent Operability')
+    await expect(
+      createVaultMarkdownFile(rootPath, relPath, '# Agent Operability v2'),
+    ).rejects.toBeInstanceOf(VaultFileAlreadyExistsError)
+
+    const content = await readFile(path.join(rootPath, 'projects', 'nabu', 'specs', 'agent-operability.md'), 'utf8')
+    expect(content).toBe('# Agent Operability')
+  })
+
+  it('updates existing markdown files and rejects missing files', async () => {
+    const rootPath = await createVaultFixture()
+    const existingRelPath = 'ideas/ai/agent-memory.md'
+
+    await updateVaultMarkdownFile(rootPath, existingRelPath, '# Updated memory')
+    await expect(
+      updateVaultMarkdownFile(rootPath, 'ideas/ai/missing.md', '# Missing'),
+    ).rejects.toBeInstanceOf(VaultFileNotFoundError)
+
+    const content = await readFile(path.join(rootPath, 'ideas', 'ai', 'agent-memory.md'), 'utf8')
+    expect(content).toBe('# Updated memory')
   })
 })

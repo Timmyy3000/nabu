@@ -2,6 +2,27 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.2.0] - 2026-04-13
+
+Agent-operability release.
+
+### Shipped
+
+- Deterministic note retrieval by canonical vault-relative path
+- Lexical search with exact phrase parsing and tag/path filters
+- Internal wiki-link and markdown note-link parsing
+- Backlinks and note neighborhood traversal
+- `/agents.md` expanded into a practical agent contract
+- Authenticated write surfaces for:
+  - folder creation
+  - note creation
+  - note update by path
+- Immediate read/search consistency after successful writes
+
+### Why it matters
+
+Nabu is no longer just a hosted markdown reader. With v0.2.0, an authenticated agent can discover how the system works via `/agents.md`, read and search the vault, traverse note relationships, and perform basic write operations directly against the filesystem-backed knowledge base.
+
 ## [0.1.1] - 2026-04-10
 
 Deployment DX release.
