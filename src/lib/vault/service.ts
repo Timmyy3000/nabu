@@ -5,7 +5,7 @@ import { getVaultConfig } from './config'
 import {
   createVaultFolder as createVaultFolderOnDisk,
   createVaultMarkdownFile,
-  listMarkdownFiles,
+  scanVaultFilesystem,
   updateVaultMarkdownFile,
   VaultFileAlreadyExistsError,
   VaultFileNotFoundError,
@@ -33,6 +33,7 @@ import type {
 type LoadedVaultIndex = VaultIndex & {
   builtAt: string
   sourceRoot: string
+  folderSet: Set<string>
 }
 
 type VaultIndexSummaryNote = {
@@ -133,22 +134,28 @@ function toLoadedVaultIndex(index: VaultIndex, sourceRoot: string): LoadedVaultI
     ...index,
     builtAt: new Date().toISOString(),
     sourceRoot,
+    folderSet: new Set(index.folders),
   }
 }
 
 async function buildIndexFromDisk(): Promise<LoadedVaultIndex> {
   const { rootPath } = await getVaultConfig()
-  const relPaths = await listMarkdownFiles(rootPath)
+  const scan = await scanVaultFilesystem(rootPath)
 
   const notes = await Promise.all(
-    relPaths.map(async (relPath) => {
+    scan.markdownFiles.map(async (relPath) => {
       const absPath = path.join(rootPath, relPath)
       const rawMarkdown = await readFile(absPath, 'utf8')
       return parseNote({ relPath, rawMarkdown })
     }),
   )
 
-  return toLoadedVaultIndex(buildVaultIndex(notes), rootPath)
+  return toLoadedVaultIndex(
+    buildVaultIndex(notes, {
+      folderPaths: scan.folderPaths,
+    }),
+    rootPath,
+  )
 }
 
 async function loadVaultIndex(forceRebuild: boolean): Promise<LoadedVaultIndex> {
@@ -552,7 +559,7 @@ export async function getFolderListing(folderPathInput: string): Promise<VaultFo
   const folderPath = normalizeFolderPathInput(folderPathInput)
   const index = await getVaultIndex()
 
-  if (folderPath && !index.folders.includes(folderPath)) {
+  if (folderPath && !index.folderSet.has(folderPath)) {
     return null
   }
 
@@ -564,24 +571,22 @@ export async function getVaultBrowseData(input: {
   folderPath: string | null | undefined
   noteSlug: string | null | undefined
 }): Promise<VaultBrowseData> {
-  const tree = await getVaultTree()
+  const index = await getVaultIndex()
+  const { folderChildren, folderNotes } = createFolderMaps(index)
+  const tree = buildFolderTreeNode('', folderChildren, folderNotes)
 
-  let folderListing: VaultFolderListing | null = null
-
+  let folderPath = ''
   try {
-    folderListing = await getFolderListing(input.folderPath ?? '')
+    folderPath = normalizeFolderPathInput(input.folderPath ?? '')
   } catch {
-    folderListing = null
+    folderPath = ''
   }
 
-  if (!folderListing) {
-    const rootListing = await getFolderListing('')
-    if (!rootListing) {
-      throw new Error('Vault root listing unavailable')
-    }
-
-    folderListing = rootListing
+  if (folderPath && !index.folderSet.has(folderPath)) {
+    folderPath = ''
   }
+
+  const folderListing = buildFolderListing(folderPath, folderChildren, folderNotes)
 
   const requestedSlug = normalizeSlugInput(input.noteSlug ?? '')
   let selectedNoteSlug: string | null = null
@@ -590,21 +595,21 @@ export async function getVaultBrowseData(input: {
   if (requestedSlug) {
     const matchingNoteInFolder = folderListing.notes.find((note) => note.slug === requestedSlug)
     const requestedNote = matchingNoteInFolder
-      ? await getNoteByPath(matchingNoteInFolder.relPath)
-      : await getNoteBySlug(requestedSlug)
+      ? index.byRelPath.get(matchingNoteInFolder.relPath) ?? null
+      : index.bySlug.get(requestedSlug) ?? null
 
-    if (requestedNote && isNoteInFolder(requestedNote.note.relPath, folderListing.path)) {
+    if (requestedNote && isNoteInFolder(requestedNote.relPath, folderListing.path)) {
       selectedNoteSlug = requestedSlug
-      selectedNote = requestedNote.note
+      selectedNote = toVaultNotePayload(requestedNote, getNoteBacklinks(index, requestedNote.relPath))
     }
   }
 
   if (!selectedNote) {
     const fallback = folderListing.notes[0]
     if (fallback) {
-      const fallbackNote = await getNoteByPath(fallback.relPath)
       selectedNoteSlug = fallback.slug
-      selectedNote = fallbackNote?.note ?? null
+      const parsed = index.byRelPath.get(fallback.relPath)
+      selectedNote = parsed ? toVaultNotePayload(parsed, getNoteBacklinks(index, parsed.relPath)) : null
     }
   }
 
@@ -826,7 +831,7 @@ export async function getVaultFolderListingResponse(folderPath: string | null | 
 
   const index = await getVaultIndex()
 
-  if (normalizedPath && !index.folders.includes(normalizedPath)) {
+  if (normalizedPath && !index.folderSet.has(normalizedPath)) {
     return Response.json(
       {
         error: 'Folder not found',

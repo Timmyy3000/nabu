@@ -358,6 +358,54 @@ describe('vault service', () => {
     })
   })
 
+  it('surfaces persisted empty folders in tree, listing, and browse data', async () => {
+    const root = await createVaultFixture({
+      'inbox.md': '# Inbox',
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+    await mkdir(path.join(root, 'projects', 'empty'), { recursive: true })
+    await mkdir(path.join(root, 'ideas', 'drafts'), { recursive: true })
+
+    const tree = await getVaultTree()
+    const projectsListing = await getFolderListing('projects')
+    const browseEmpty = await getVaultBrowseData({
+      folderPath: 'projects/empty',
+      noteSlug: '',
+    })
+
+    expect(tree).toMatchObject({
+      children: [
+        {
+          path: 'ideas',
+          noteCount: 0,
+          directNoteCount: 0,
+          children: [{ path: 'ideas/drafts', noteCount: 0, directNoteCount: 0 }],
+        },
+        {
+          path: 'projects',
+          children: [
+            { path: 'projects/empty', noteCount: 0, directNoteCount: 0 },
+            { path: 'projects/nabu', noteCount: 1, directNoteCount: 1 },
+          ],
+        },
+      ],
+    })
+
+    expect(projectsListing).toMatchObject({
+      path: 'projects',
+      folders: [
+        { path: 'projects/empty', noteCount: 0, directNoteCount: 0 },
+        { path: 'projects/nabu', noteCount: 1, directNoteCount: 1 },
+      ],
+    })
+
+    expect(browseEmpty).toMatchObject({
+      folder: { path: 'projects/empty', notes: [] },
+      selectedNoteSlug: null,
+      note: null,
+    })
+  })
+
   it('builds deterministic browse data from folder and note inputs', async () => {
     await createVaultFixture({
       'inbox.md': '# Inbox',

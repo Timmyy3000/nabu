@@ -6,6 +6,7 @@ import {
   createVaultFolder,
   createVaultMarkdownFile,
   listMarkdownFiles,
+  scanVaultFilesystem,
   updateVaultMarkdownFile,
   VaultFileAlreadyExistsError,
   VaultFileNotFoundError,
@@ -28,6 +29,7 @@ async function createVaultFixture() {
 
   await mkdir(path.join(root, 'ideas', 'ai'), { recursive: true })
   await mkdir(path.join(root, 'projects', 'nabu'), { recursive: true })
+  await mkdir(path.join(root, 'projects', 'empty'), { recursive: true })
 
   await writeFile(path.join(root, 'ideas', 'ai', 'agent-memory.md'), '# Agent memory')
   await writeFile(path.join(root, 'projects', 'nabu', 'roadmap.md'), '# Roadmap')
@@ -68,6 +70,19 @@ describe('listMarkdownFiles', () => {
     const files = await listMarkdownFiles(rootPath)
 
     expect(files).not.toContain('linked-outside/secret.md')
+  })
+
+  it('scans markdown files and persisted directories in one pass', async () => {
+    const rootPath = await createVaultFixture()
+
+    const scanned = await scanVaultFilesystem(rootPath)
+
+    expect(scanned.markdownFiles).toEqual([
+      'ideas/ai/agent-memory.md',
+      'ideas/draft.MD',
+      'projects/nabu/roadmap.md',
+    ])
+    expect(scanned.folderPaths).toEqual(['ideas', 'ideas/ai', 'projects', 'projects/empty', 'projects/nabu'])
   })
 })
 
