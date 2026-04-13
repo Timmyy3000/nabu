@@ -355,6 +355,27 @@ describe('vault retrieval contracts', () => {
     })
   })
 
+  it('returns folder listing for persisted empty folders', async () => {
+    const root = await createVaultFixture({
+      'ideas/note.md': '# Note',
+    })
+    await mkdir(path.join(root, 'ideas', 'empty'), { recursive: true })
+
+    const response = await getVaultFolderListingResponse('ideas/empty')
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      builtAt: expect.any(String),
+      folder: {
+        path: 'ideas/empty',
+        name: 'empty',
+        folders: [],
+        notes: [],
+      },
+    })
+  })
+
   it('returns lexical search payload with normalized query and pagination metadata', async () => {
     await createVaultFixture({
       'ideas/agent-memory.md': '---\ntitle: Agent Memory\nsummary: Shared context for agents\n---\nBody',

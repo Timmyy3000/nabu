@@ -63,6 +63,17 @@ describe('buildVaultIndex', () => {
     expect(index.stats.folderCount).toBe(4)
   })
 
+  it('unions real folder paths so empty persisted folders are indexed', () => {
+    const notes = [note('projects/nabu/roadmap.md', '# Roadmap')]
+
+    const index = buildVaultIndex(notes, {
+      folderPaths: ['ideas', 'projects', 'projects/empty', 'projects/nabu'],
+    })
+
+    expect(index.folders).toEqual(['ideas', 'projects', 'projects/empty', 'projects/nabu'])
+    expect(index.stats.folderCount).toBe(4)
+  })
+
   it('builds a tag map to note paths with deterministic ordering', () => {
     const notes = [
       note('ideas/a.md', '---\ntags: [AI, memory]\n---\nA'),

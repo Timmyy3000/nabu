@@ -31,6 +31,17 @@ function collectFolders(relPath: string): string[] {
   return folders
 }
 
+function collectFolderHierarchy(folderPath: string): string[] {
+  const segments = folderPath.split('/').filter(Boolean)
+  const folders: string[] = []
+
+  for (let index = 0; index < segments.length; index += 1) {
+    folders.push(segments.slice(0, index + 1).join('/'))
+  }
+
+  return folders
+}
+
 function normalizeWikiSlugTarget(value: string): string {
   return value
     .trim()
@@ -234,7 +245,12 @@ function compareResolvedOutgoing(left: VaultResolvedOutgoingLink, right: VaultRe
   return compareStrings(left.target, right.target)
 }
 
-export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
+export function buildVaultIndex(
+  inputNotes: ParsedVaultNote[],
+  input?: {
+    folderPaths?: string[]
+  },
+): VaultIndex {
   const notes = [...inputNotes].sort((left, right) => compareStrings(left.relPath, right.relPath))
 
   const byRelPath = new Map<string, ParsedVaultNote>()
@@ -272,6 +288,20 @@ export function buildVaultIndex(inputNotes: ParsedVaultNote[]): VaultIndex {
     }
 
     warnings.push(...note.warnings)
+  }
+
+  for (const folderPath of input?.folderPaths ?? []) {
+    let normalizedFolderPath: string
+
+    try {
+      normalizedFolderPath = normalizeVaultPath(folderPath)
+    } catch {
+      continue
+    }
+
+    for (const folder of collectFolderHierarchy(normalizedFolderPath)) {
+      folderSet.add(folder)
+    }
   }
 
   const slugCollisions = new Map<string, string[]>()
