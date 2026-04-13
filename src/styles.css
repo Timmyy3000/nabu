@@ -1,10 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: #f6f6f4;
-  color: #1f1f1b;
+  background: #14171d;
+  color: #d8dde7;
+  --bg: #14171d;
+  --surface: #1b2028;
+  --surface-2: #1f2530;
+  --surface-hover: #252d3a;
+  --surface-active: #293344;
+  --border: #313949;
+  --border-strong: #4f5d75;
+  --text: #d8dde7;
+  --muted: #96a1b3;
+  --danger: #ff9191;
+  --content-max-width: 74ch;
 }
 
 * {
@@ -15,9 +26,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(194, 181, 155, 0.3), transparent 30%),
-    #f6f6f4;
+  background: var(--bg);
+  color: var(--text);
 }
 
 a {
@@ -38,15 +48,15 @@ select {
 
 .app-shell {
   min-height: 100vh;
-  padding: 1rem;
+  padding: 0.5rem;
 }
 
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  font-size: 0.75rem;
-  color: #6c6b63;
-  margin: 0 0 0.75rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0 0 0.65rem;
 }
 
 .panel h1,
@@ -55,21 +65,42 @@ select {
 }
 
 .muted {
-  color: #6c6b63;
+  color: var(--muted);
 }
 
 .panel {
-  border: 1px solid #d8d6ce;
-  border-radius: 0.75rem;
-  padding: 1rem;
-  background: #faf9f5;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: var(--surface);
 }
 
 .vault-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(220px, 280px) 1fr;
-  gap: 1rem;
-  min-height: calc(100vh - 2rem);
+  grid-template-columns: 240px 300px minmax(0, 1fr);
+  min-height: calc(100vh - 1rem);
+}
+
+.vault-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem 0.95rem;
+  border-right: 1px solid var(--border);
+}
+
+.vault-pane:last-child {
+  border-right: 0;
+}
+
+.vault-sidebar h1 {
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.vault-list h2,
+.vault-note h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
 }
 
 .vault-sidebar,
@@ -82,51 +113,191 @@ select {
 .tree-list ul,
 .note-list {
   margin: 0;
-  padding-left: 1rem;
+  padding-left: 0;
   list-style: none;
+}
+
+.tree-list ul {
+  margin-left: 0.45rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--border);
+}
+
+.search-form-compact {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.8rem 0 0.95rem;
+}
+
+.search-field {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.search-form input {
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 0.2rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.search-form label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.search-actions button {
+  width: fit-content;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.2rem;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.search-results li p {
+  margin: 0.18rem 0;
+}
+
+.note-row {
+  margin: 0;
 }
 
 .tree-list li,
 .note-list li {
-  margin: 0.25rem 0;
+  margin: 0;
 }
 
 .tree-list a,
 .note-list a {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.4rem;
+  display: block;
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.2rem;
+  border-left: 2px solid transparent;
+}
+
+.tree-list a:hover,
+.note-list a:hover {
+  background: var(--surface-hover);
 }
 
 .tree-list a.is-active,
 .note-list a.is-active {
-  background: #e0ddd1;
+  background: var(--surface-active);
+  border-left-color: var(--border-strong);
+  font-weight: 600;
+}
+
+.note-list .muted {
+  font-size: 0.8rem;
 }
 
 .vault-note h2 {
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.15rem;
 }
 
-.vault-note p {
+.note-head {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.45rem;
+}
+
+.note-meta {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.note-markdown {
+  width: min(100%, var(--content-max-width));
+  line-height: 1.6;
+}
+
+.note-markdown > *:first-child {
   margin-top: 0;
 }
 
-.vault-note pre {
-  background: #f0eee6;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
+.note-markdown p,
+.note-markdown ul,
+.note-markdown ol,
+.note-markdown blockquote,
+.note-markdown pre {
+  margin: 0.75rem 0;
+}
+
+.note-markdown h1,
+.note-markdown h2,
+.note-markdown h3 {
+  line-height: 1.2;
+  margin: 1rem 0 0.45rem;
+}
+
+.note-markdown h1 {
+  font-size: 1.45rem;
+}
+
+.note-markdown h2 {
+  font-size: 1.2rem;
+}
+
+.note-markdown h3 {
+  font-size: 1.03rem;
+}
+
+.note-markdown code {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 0.08rem 0.28rem;
+  border-radius: 0.18rem;
+}
+
+.note-markdown pre {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.22rem;
   overflow-x: auto;
 }
 
+.note-markdown pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.note-markdown blockquote {
+  margin-left: 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border-strong);
+  color: #c0c8d6;
+}
+
+.note-markdown img {
+  max-width: 100%;
+  border: 1px solid var(--border);
+}
+
 .logout-link {
-  font-size: 0.85rem;
-  color: #4f4d45;
+  font-size: 0.8rem;
+  color: var(--muted);
   text-decoration: underline;
 }
 
 .auth-card {
   max-width: 420px;
   margin: 8vh auto 0;
+  padding: 1rem;
 }
 
 .auth-form {
@@ -136,26 +307,93 @@ select {
 
 .auth-form input {
   padding: 0.45rem 0.55rem;
-  border: 1px solid #bcb8ab;
-  border-radius: 0.35rem;
-  background: #fffdf8;
+  border: 1px solid var(--border);
+  border-radius: 0.2rem;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .auth-form button {
   width: fit-content;
-  padding: 0.45rem 0.85rem;
-  border: 1px solid #7f7a69;
-  border-radius: 0.35rem;
-  background: #e6e2d6;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.2rem;
+  background: var(--surface-2);
+  color: var(--text);
   cursor: pointer;
 }
 
 .auth-error {
-  color: #8c2b2b;
+  color: var(--danger);
+}
+
+.agents-doc {
+  max-width: 920px;
+  margin: 0 auto;
+  line-height: 1.6;
+  padding: 1rem 1.1rem;
+}
+
+.agents-doc h2 {
+  margin-top: 1.25rem;
+}
+
+.agents-doc code {
+  background: var(--surface-2);
+  border-radius: 0.18rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.agents-doc ul,
+.agents-doc ol {
+  padding-left: 1.25rem;
+}
+
+.agents-doc li {
+  margin: 0.35rem 0;
+}
+
+@media (max-width: 1100px) {
+  .vault-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .vault-pane-list {
+    border-right: 0;
+  }
+
+  .vault-pane-note {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+  }
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    padding: 0;
+  }
+
   .vault-layout {
     grid-template-columns: 1fr;
+    min-height: 100vh;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .vault-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .vault-pane:last-child {
+    border-bottom: 0;
+  }
+
+  .vault-pane-note {
+    border-top: 0;
+  }
+
+  .auth-card {
+    margin-top: 10vh;
   }
 }

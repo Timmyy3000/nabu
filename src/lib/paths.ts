@@ -5,6 +5,10 @@ export function normalizeVaultPath(input: string): string {
     throw new Error('Path cannot be empty.')
   }
 
+  if (trimmed.startsWith('/') || /^[a-zA-Z]:\//.test(trimmed)) {
+    throw new Error('Absolute paths are not allowed.')
+  }
+
   const segments = trimmed
     .split('/')
     .map((segment) => segment.trim())

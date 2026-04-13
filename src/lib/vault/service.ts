@@ -2,10 +2,33 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
 import { getVaultConfig } from './config'
-import { listMarkdownFiles } from './filesystem'
+import {
+  createVaultFolder as createVaultFolderOnDisk,
+  createVaultMarkdownFile,
+  listMarkdownFiles,
+  updateVaultMarkdownFile,
+  VaultFileAlreadyExistsError,
+  VaultFileNotFoundError,
+} from './filesystem'
 import { buildVaultIndex } from './index'
-import { parseNote, type ParsedVaultNote } from './parse-note'
-import type { VaultFolderListItem, VaultFolderTreeNode, VaultIndex, VaultIndexStats } from './types'
+import { parseNote, type ParsedVaultNote, type VaultNoteLink } from './parse-note'
+import {
+  normalizeSearchLimit,
+  normalizeSearchOffset,
+  normalizeSearchQuery,
+  normalizeSearchTag,
+  searchVaultIndex,
+  type VaultSearchResponse,
+} from './search'
+import type {
+  VaultBacklink,
+  VaultFolderListItem,
+  VaultFolderTreeNode,
+  VaultIndex,
+  VaultIndexStats,
+  VaultNoteNeighborhood,
+  VaultRelatedReason,
+} from './types'
 
 type LoadedVaultIndex = VaultIndex & {
   builtAt: string
@@ -34,11 +57,18 @@ type VaultNotePayload = {
   updatedAt: string | null
   frontmatter: Record<string, unknown>
   body: string
+  outgoingLinks: VaultNoteLink[]
+  backlinks: VaultBacklink[]
 }
 
 type VaultSlugLookup = {
   builtAt: string
   collisions: string[]
+  note: VaultNotePayload
+}
+
+type VaultPathLookup = {
+  builtAt: string
   note: VaultNotePayload
 }
 
@@ -54,6 +84,37 @@ type VaultBrowseData = {
   folder: VaultFolderListing
   selectedNoteSlug: string | null
   note: VaultNotePayload | null
+}
+
+type VaultFolderCreateResult = {
+  path: string
+  created: boolean
+  builtAt: string
+}
+
+type VaultNoteWriteInput = {
+  path: string | null | undefined
+  rawMarkdown: string | null | undefined
+}
+
+type VaultNoteCreateResult = {
+  builtAt: string
+  created: true
+  note: VaultNotePayload
+}
+
+type VaultNoteUpdateResult = {
+  builtAt: string
+  updated: true
+  note: VaultNotePayload
+}
+
+type VaultSearchInput = {
+  query: string
+  path?: string | null
+  tag?: string | null
+  limit?: number | null
+  offset?: number | null
 }
 
 let cachedIndex: LoadedVaultIndex | null = null
@@ -124,7 +185,7 @@ function toSummaryNote(note: ParsedVaultNote): VaultIndexSummaryNote {
   }
 }
 
-function toVaultNotePayload(note: ParsedVaultNote): VaultNotePayload {
+function toVaultNotePayload(note: ParsedVaultNote, backlinks: VaultBacklink[]): VaultNotePayload {
   return {
     id: note.id,
     relPath: note.relPath,
@@ -136,6 +197,129 @@ function toVaultNotePayload(note: ParsedVaultNote): VaultNotePayload {
     updatedAt: note.updatedAt,
     frontmatter: note.frontmatter,
     body: note.body,
+    outgoingLinks: note.outgoingLinks,
+    backlinks,
+  }
+}
+
+function compareStrings(left: string, right: string): number {
+  if (left < right) {
+    return -1
+  }
+
+  if (left > right) {
+    return 1
+  }
+
+  return 0
+}
+
+function compareReason(left: VaultRelatedReason, right: VaultRelatedReason): number {
+  const weight: Record<VaultRelatedReason, number> = {
+    outgoing: 1,
+    backlink: 2,
+    'shared-folder': 3,
+  }
+
+  return weight[left] - weight[right]
+}
+
+function getParentFolder(relPath: string): string {
+  const parent = path.posix.dirname(relPath)
+  return parent === '.' ? '' : parent
+}
+
+function getNoteBacklinks(index: LoadedVaultIndex, relPath: string): VaultBacklink[] {
+  return index.backlinksByTargetRelPath.get(relPath) ?? []
+}
+
+function getNoteNeighborhood(index: LoadedVaultIndex, note: ParsedVaultNote): VaultNoteNeighborhood {
+  const outgoing = index.resolvedOutgoingBySourceRelPath.get(note.relPath) ?? []
+  const backlinks = getNoteBacklinks(index, note.relPath)
+  const unresolvedOutgoing = index.unresolvedOutgoingBySourceRelPath.get(note.relPath) ?? []
+  const related = new Map<string, { score: number; reasons: Set<VaultRelatedReason> }>()
+
+  const pushReason = (relPath: string, score: number, reason: VaultRelatedReason) => {
+    if (relPath === note.relPath) {
+      return
+    }
+
+    const existing = related.get(relPath)
+    if (existing) {
+      existing.score += score
+      existing.reasons.add(reason)
+      return
+    }
+
+    related.set(relPath, {
+      score,
+      reasons: new Set([reason]),
+    })
+  }
+
+  for (const link of outgoing) {
+    pushReason(link.targetRelPath, 2, 'outgoing')
+  }
+
+  for (const backlink of backlinks) {
+    pushReason(backlink.sourceRelPath, 2, 'backlink')
+  }
+
+  const noteFolder = getParentFolder(note.relPath)
+  for (const candidate of index.notes) {
+    if (candidate.relPath === note.relPath) {
+      continue
+    }
+
+    if (getParentFolder(candidate.relPath) === noteFolder) {
+      pushReason(candidate.relPath, 1, 'shared-folder')
+    }
+  }
+
+  const relatedNotes = [...related.entries()]
+    .flatMap(([relPath, data]) => {
+      const candidate = index.byRelPath.get(relPath)
+      if (!candidate) {
+        return []
+      }
+
+      return [
+        {
+          relPath: candidate.relPath,
+          slug: candidate.slug,
+          title: candidate.title,
+          connectionCount: data.score,
+          reasons: [...data.reasons].sort(compareReason),
+        },
+      ]
+    })
+    .sort((left, right) => {
+      if (left.connectionCount !== right.connectionCount) {
+        return right.connectionCount - left.connectionCount
+      }
+
+      const titleOrder = compareStrings(left.title, right.title)
+      if (titleOrder !== 0) {
+        return titleOrder
+      }
+
+      return compareStrings(left.relPath, right.relPath)
+    })
+
+  return {
+    note: {
+      relPath: note.relPath,
+      slug: note.slug,
+      title: note.title,
+    },
+    outgoing,
+    backlinks,
+    relatedNotes,
+    stats: {
+      outgoingResolvedCount: outgoing.length,
+      backlinkCount: backlinks.length,
+      unresolvedOutgoingCount: unresolvedOutgoing.length,
+    },
   }
 }
 
@@ -150,6 +334,55 @@ function normalizeFolderPathInput(folderPath: string | null | undefined): string
   }
 
   return normalizeVaultPath(trimmed)
+}
+
+function normalizeNotePathInput(notePath: string | null | undefined): string {
+  if (notePath == null) {
+    throw new Error('Note path is required')
+  }
+
+  const trimmed = notePath.trim()
+  if (!trimmed) {
+    throw new Error('Note path is required')
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+function normalizeFolderCreatePathInput(folderPath: string | null | undefined): string {
+  if (folderPath == null) {
+    throw new Error('Folder path is required')
+  }
+
+  const trimmed = folderPath.trim()
+  if (!trimmed) {
+    throw new Error('Folder path is required')
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+function normalizeMarkdownNotePathInput(notePath: string | null | undefined): string {
+  const normalized = normalizeNotePathInput(notePath)
+  const withMarkdownExtension = normalized.toLowerCase().endsWith('.md') ? normalized : `${normalized}.md`
+
+  if (withMarkdownExtension.endsWith('/.md') || withMarkdownExtension === '.md') {
+    throw new Error('Note path must target a markdown file')
+  }
+
+  return withMarkdownExtension
+}
+
+function normalizeRawMarkdownInput(rawMarkdown: string | null | undefined): string {
+  if (typeof rawMarkdown !== 'string') {
+    throw new Error('Raw markdown is required')
+  }
+
+  if (!rawMarkdown.trim()) {
+    throw new Error('Raw markdown is required')
+  }
+
+  return rawMarkdown
 }
 
 function createFolderName(folderPath: string): string {
@@ -278,8 +511,35 @@ export async function getNoteBySlug(slug: string): Promise<VaultSlugLookup | nul
   return {
     builtAt: index.builtAt,
     collisions: index.slugCollisions.get(normalizedSlug) ?? [],
-    note: toVaultNotePayload(note),
+    note: toVaultNotePayload(note, getNoteBacklinks(index, note.relPath)),
   }
+}
+
+export async function getNoteByPath(relPath: string): Promise<VaultPathLookup | null> {
+  const normalizedPath = normalizeVaultPath(relPath)
+  const index = await getVaultIndex()
+  const note = index.byRelPath.get(normalizedPath)
+
+  if (!note) {
+    return null
+  }
+
+  return {
+    builtAt: index.builtAt,
+    note: toVaultNotePayload(note, getNoteBacklinks(index, note.relPath)),
+  }
+}
+
+export async function getNoteNeighborhoodByPath(relPath: string): Promise<VaultNoteNeighborhood | null> {
+  const normalizedPath = normalizeVaultPath(relPath)
+  const index = await getVaultIndex()
+  const note = index.byRelPath.get(normalizedPath)
+
+  if (!note) {
+    return null
+  }
+
+  return getNoteNeighborhood(index, note)
 }
 
 export async function getVaultTree(): Promise<VaultFolderTreeNode> {
@@ -328,7 +588,11 @@ export async function getVaultBrowseData(input: {
   let selectedNote: VaultNotePayload | null = null
 
   if (requestedSlug) {
-    const requestedNote = await getNoteBySlug(requestedSlug)
+    const matchingNoteInFolder = folderListing.notes.find((note) => note.slug === requestedSlug)
+    const requestedNote = matchingNoteInFolder
+      ? await getNoteByPath(matchingNoteInFolder.relPath)
+      : await getNoteBySlug(requestedSlug)
+
     if (requestedNote && isNoteInFolder(requestedNote.note.relPath, folderListing.path)) {
       selectedNoteSlug = requestedSlug
       selectedNote = requestedNote.note
@@ -338,7 +602,7 @@ export async function getVaultBrowseData(input: {
   if (!selectedNote) {
     const fallback = folderListing.notes[0]
     if (fallback) {
-      const fallbackNote = await getNoteBySlug(fallback.slug)
+      const fallbackNote = await getNoteByPath(fallback.relPath)
       selectedNoteSlug = fallback.slug
       selectedNote = fallbackNote?.note ?? null
     }
@@ -350,6 +614,167 @@ export async function getVaultBrowseData(input: {
     selectedNoteSlug,
     note: selectedNote,
   }
+}
+
+async function readNoteFromRebuiltIndex(relPath: string): Promise<{ index: LoadedVaultIndex; note: VaultNotePayload }> {
+  const index = await rebuildVaultIndex()
+  const parsed = index.byRelPath.get(relPath)
+
+  if (!parsed) {
+    throw new Error(`Expected note "${relPath}" to exist after write`)
+  }
+
+  return {
+    index,
+    note: toVaultNotePayload(parsed, getNoteBacklinks(index, relPath)),
+  }
+}
+
+export async function createVaultFolder(folderPathInput: string): Promise<VaultFolderCreateResult> {
+  const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
+  const { rootPath } = await getVaultConfig()
+  const created = await createVaultFolderOnDisk(rootPath, normalizedPath)
+  const index = await rebuildVaultIndex()
+
+  return {
+    path: normalizedPath,
+    created,
+    builtAt: index.builtAt,
+  }
+}
+
+export async function createVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteCreateResult> {
+  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+  const rawMarkdown = normalizeRawMarkdownInput(input.rawMarkdown)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+  } catch (error) {
+    if (error instanceof VaultFileAlreadyExistsError) {
+      throw new Error(`Note already exists: ${normalizedPath}`)
+    }
+
+    throw error
+  }
+
+  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
+
+  return {
+    builtAt: index.builtAt,
+    created: true,
+    note,
+  }
+}
+
+export async function updateVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteUpdateResult> {
+  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+  const rawMarkdown = normalizeRawMarkdownInput(input.rawMarkdown)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await updateVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+  } catch (error) {
+    if (error instanceof VaultFileNotFoundError) {
+      throw new Error(`Note not found: ${normalizedPath}`)
+    }
+
+    throw error
+  }
+
+  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
+
+  return {
+    builtAt: index.builtAt,
+    updated: true,
+    note,
+  }
+}
+
+function normalizeSearchPath(pathInput: string | null | undefined): string {
+  if (pathInput == null) {
+    return ''
+  }
+
+  const trimmed = pathInput.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSearchResponse> {
+  const queryData = normalizeSearchQuery(input.query)
+
+  if (!queryData.normalizedQuery) {
+    throw new Error('Search query is required')
+  }
+
+  const normalizedPath = normalizeSearchPath(input.path)
+  const normalizedTag = normalizeSearchTag(input.tag)
+  const limit = normalizeSearchLimit(input.limit)
+  const offset = normalizeSearchOffset(input.offset)
+  const index = await getVaultIndex()
+
+  return searchVaultIndex({
+    notes: index.notes,
+    query: queryData.query,
+    path: normalizedPath,
+    tag: normalizedTag,
+    limit,
+    offset,
+  })
+}
+
+export async function getVaultSearchResponse(input: {
+  query: string | null | undefined
+  path: string | null | undefined
+  tag: string | null | undefined
+  limit: string | null | undefined
+  offset: string | null | undefined
+}): Promise<Response> {
+  const rawQuery = input.query ?? ''
+  const normalizedQuery = normalizeSearchQuery(rawQuery).normalizedQuery
+
+  if (!normalizedQuery) {
+    return Response.json(
+      {
+        error: 'Search query is required',
+      },
+      { status: 400 },
+    )
+  }
+
+  let normalizedPath = ''
+  try {
+    normalizedPath = normalizeSearchPath(input.path)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid folder path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const parsedLimit = Number.parseInt(input.limit ?? '', 10)
+  const parsedOffset = Number.parseInt(input.offset ?? '', 10)
+
+  const result = await searchVaultNotes({
+    query: rawQuery,
+    path: normalizedPath,
+    tag: input.tag,
+    limit: Number.isNaN(parsedLimit) ? null : parsedLimit,
+    offset: Number.isNaN(parsedOffset) ? null : parsedOffset,
+  })
+  const index = await getVaultIndex()
+
+  return Response.json({
+    builtAt: index.builtAt,
+    ...result,
+  })
 }
 
 export async function getVaultIndexResponse(): Promise<Response> {
@@ -435,6 +860,149 @@ export async function getVaultNoteBySlugResponse(slug: string): Promise<Response
   return Response.json(found)
 }
 
+export async function getVaultNoteByPathResponse(pathInput: string | null | undefined): Promise<Response> {
+  let normalizedPath: string
+
+  try {
+    normalizedPath = normalizeNotePathInput(pathInput)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: pathInput ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const found = await getNoteByPath(normalizedPath)
+
+  if (!found) {
+    return Response.json(
+      {
+        error: 'Note not found',
+        path: normalizedPath,
+      },
+      { status: 404 },
+    )
+  }
+
+  return Response.json(found)
+}
+
+export async function getVaultNoteNeighborhoodResponse(pathInput: string | null | undefined): Promise<Response> {
+  let normalizedPath: string
+
+  try {
+    normalizedPath = normalizeNotePathInput(pathInput)
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: pathInput ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  const index = await getVaultIndex()
+  const note = index.byRelPath.get(normalizedPath)
+
+  if (!note) {
+    return Response.json(
+      {
+        error: 'Note not found',
+        path: normalizedPath,
+      },
+      { status: 404 },
+    )
+  }
+
+  return Response.json({
+    builtAt: index.builtAt,
+    ...getNoteNeighborhood(index, note),
+  })
+}
+
+export async function createVaultFolderResponse(input: { path: string | null | undefined }): Promise<Response> {
+  let created: VaultFolderCreateResult
+
+  try {
+    created = await createVaultFolder(input.path ?? '')
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid folder path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  return Response.json(
+    {
+      builtAt: created.builtAt,
+      folder: {
+        path: created.path,
+        created: created.created,
+      },
+    },
+    { status: created.created ? 201 : 200 },
+  )
+}
+
+export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promise<Response> {
+  try {
+    const created = await createVaultNote(input)
+    return Response.json(created, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note already exists: ')) {
+      const notePath = error.message.replace('Note already exists: ', '')
+      return Response.json(
+        {
+          error: 'Note already exists',
+          path: notePath,
+        },
+        { status: 409 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+}
+
+export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput): Promise<Response> {
+  try {
+    const updated = await updateVaultNote(input)
+    return Response.json(updated)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note not found: ')) {
+      const notePath = error.message.replace('Note not found: ', '')
+      return Response.json(
+        {
+          error: 'Note not found',
+          path: notePath,
+        },
+        { status: 404 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+}
+
 export function __resetVaultServiceForTests() {
   cachedIndex = null
   inFlightBuild = null
@@ -445,7 +1013,10 @@ export type {
   VaultFolderListing,
   VaultBrowseData,
   VaultIndexStats,
+  VaultNoteNeighborhood,
   VaultIndexSummaryNote,
   VaultNotePayload,
+  VaultPathLookup,
+  VaultSearchResponse,
   VaultSlugLookup,
 }

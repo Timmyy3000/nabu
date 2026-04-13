@@ -90,4 +90,85 @@ title: [broken
     expect(note.warnings).toHaveLength(1)
     expect(note.warnings[0]).toContain('Failed to parse frontmatter')
   })
+
+  it('extracts wiki-links and internal markdown note links from body', () => {
+    const note = parseNote({
+      relPath: 'ideas/agent-memory.md',
+      rawMarkdown: `# Links
+[[Roadmap]]
+[[projects/vision|Product Vision]]
+[Roadmap Doc](../projects/roadmap.md)
+[Vision](../projects/vision.md#focus)
+[External](https://example.com/docs)
+![Image](../assets/image.png)
+`,
+    })
+
+    expect(note.outgoingLinks).toEqual([
+      {
+        raw: '[[Roadmap]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Roadmap',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        raw: '[[projects/vision|Product Vision]]',
+        kind: 'wiki',
+        text: 'Product Vision',
+        target: 'projects/vision',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        raw: '[Roadmap Doc](../projects/roadmap.md)',
+        kind: 'markdown',
+        text: 'Roadmap Doc',
+        target: '../projects/roadmap.md',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        raw: '[Vision](../projects/vision.md#focus)',
+        kind: 'markdown',
+        text: 'Vision',
+        target: '../projects/vision.md#focus',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
+
+  it('preserves duplicate links and ignores malformed empty wiki-links', () => {
+    const note = parseNote({
+      relPath: 'ideas/dupes.md',
+      rawMarkdown: `[[Roadmap]]\n[[Roadmap]]\n[[]]\n[[   ]]\n`,
+    })
+
+    expect(note.outgoingLinks).toEqual([
+      {
+        raw: '[[Roadmap]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Roadmap',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        raw: '[[Roadmap]]',
+        kind: 'wiki',
+        text: null,
+        target: 'Roadmap',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
 })

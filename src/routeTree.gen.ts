@@ -11,11 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AgentsDotmdRouteImport } from './routes/agents[.]md'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
 import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
+import { Route as ApiVaultSearchRouteImport } from './routes/api/vault/search'
 import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiVaultNotesIndexRouteImport } from './routes/api/vault/notes/index'
+import { Route as ApiVaultNotesNeighborhoodRouteImport } from './routes/api/vault/notes/neighborhood'
+import { Route as ApiVaultNotesByPathRouteImport } from './routes/api/vault/notes/by-path'
 import { Route as ApiVaultNotesSlugRouteImport } from './routes/api/vault/notes/$slug'
 import { Route as ApiVaultIndexStatsRouteImport } from './routes/api/vault/index/stats'
 
@@ -27,6 +32,11 @@ const LogoutRoute = LogoutRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentsDotmdRoute = AgentsDotmdRouteImport.update({
+  id: '/agents.md',
+  path: '/agents.md',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -44,6 +54,11 @@ const ApiVaultTreeRoute = ApiVaultTreeRouteImport.update({
   path: '/api/vault/tree',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVaultSearchRoute = ApiVaultSearchRouteImport.update({
+  id: '/api/vault/search',
+  path: '/api/vault/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
   id: '/api/vault/folders',
   path: '/api/vault/folders',
@@ -52,6 +67,22 @@ const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
 const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
   id: '/api/auth/login',
   path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultNotesIndexRoute = ApiVaultNotesIndexRouteImport.update({
+  id: '/api/vault/notes/',
+  path: '/api/vault/notes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultNotesNeighborhoodRoute =
+  ApiVaultNotesNeighborhoodRouteImport.update({
+    id: '/api/vault/notes/neighborhood',
+    path: '/api/vault/notes/neighborhood',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiVaultNotesByPathRoute = ApiVaultNotesByPathRouteImport.update({
+  id: '/api/vault/notes/by-path',
+  path: '/api/vault/notes/by-path',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiVaultNotesSlugRoute = ApiVaultNotesSlugRouteImport.update({
@@ -67,84 +98,119 @@ const ApiVaultIndexStatsRoute = ApiVaultIndexStatsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault/': typeof ApiVaultIndexRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
+  '/api/vault/notes/by-path': typeof ApiVaultNotesByPathRoute
+  '/api/vault/notes/neighborhood': typeof ApiVaultNotesNeighborhoodRoute
+  '/api/vault/notes/': typeof ApiVaultNotesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault': typeof ApiVaultIndexRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
+  '/api/vault/notes/by-path': typeof ApiVaultNotesByPathRoute
+  '/api/vault/notes/neighborhood': typeof ApiVaultNotesNeighborhoodRoute
+  '/api/vault/notes': typeof ApiVaultNotesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/vault/': typeof ApiVaultIndexRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
+  '/api/vault/notes/by-path': typeof ApiVaultNotesByPathRoute
+  '/api/vault/notes/neighborhood': typeof ApiVaultNotesNeighborhoodRoute
+  '/api/vault/notes/': typeof ApiVaultNotesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agents.md'
     | '/login'
     | '/logout'
     | '/api/auth/login'
     | '/api/vault/folders'
+    | '/api/vault/search'
     | '/api/vault/tree'
     | '/api/vault/'
     | '/api/vault/index/stats'
     | '/api/vault/notes/$slug'
+    | '/api/vault/notes/by-path'
+    | '/api/vault/notes/neighborhood'
+    | '/api/vault/notes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agents.md'
     | '/login'
     | '/logout'
     | '/api/auth/login'
     | '/api/vault/folders'
+    | '/api/vault/search'
     | '/api/vault/tree'
     | '/api/vault'
     | '/api/vault/index/stats'
     | '/api/vault/notes/$slug'
+    | '/api/vault/notes/by-path'
+    | '/api/vault/notes/neighborhood'
+    | '/api/vault/notes'
   id:
     | '__root__'
     | '/'
+    | '/agents.md'
     | '/login'
     | '/logout'
     | '/api/auth/login'
     | '/api/vault/folders'
+    | '/api/vault/search'
     | '/api/vault/tree'
     | '/api/vault/'
     | '/api/vault/index/stats'
     | '/api/vault/notes/$slug'
+    | '/api/vault/notes/by-path'
+    | '/api/vault/notes/neighborhood'
+    | '/api/vault/notes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentsDotmdRoute: typeof AgentsDotmdRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiVaultFoldersRoute: typeof ApiVaultFoldersRoute
+  ApiVaultSearchRoute: typeof ApiVaultSearchRoute
   ApiVaultTreeRoute: typeof ApiVaultTreeRoute
   ApiVaultIndexRoute: typeof ApiVaultIndexRoute
   ApiVaultIndexStatsRoute: typeof ApiVaultIndexStatsRoute
   ApiVaultNotesSlugRoute: typeof ApiVaultNotesSlugRoute
+  ApiVaultNotesByPathRoute: typeof ApiVaultNotesByPathRoute
+  ApiVaultNotesNeighborhoodRoute: typeof ApiVaultNotesNeighborhoodRoute
+  ApiVaultNotesIndexRoute: typeof ApiVaultNotesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -161,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agents.md': {
+      id: '/agents.md'
+      path: '/agents.md'
+      fullPath: '/agents.md'
+      preLoaderRoute: typeof AgentsDotmdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -184,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVaultTreeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vault/search': {
+      id: '/api/vault/search'
+      path: '/api/vault/search'
+      fullPath: '/api/vault/search'
+      preLoaderRoute: typeof ApiVaultSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/vault/folders': {
       id: '/api/vault/folders'
       path: '/api/vault/folders'
@@ -196,6 +276,27 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/login'
       fullPath: '/api/auth/login'
       preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/': {
+      id: '/api/vault/notes/'
+      path: '/api/vault/notes'
+      fullPath: '/api/vault/notes/'
+      preLoaderRoute: typeof ApiVaultNotesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/neighborhood': {
+      id: '/api/vault/notes/neighborhood'
+      path: '/api/vault/notes/neighborhood'
+      fullPath: '/api/vault/notes/neighborhood'
+      preLoaderRoute: typeof ApiVaultNotesNeighborhoodRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/by-path': {
+      id: '/api/vault/notes/by-path'
+      path: '/api/vault/notes/by-path'
+      fullPath: '/api/vault/notes/by-path'
+      preLoaderRoute: typeof ApiVaultNotesByPathRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/vault/notes/$slug': {
@@ -217,14 +318,19 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentsDotmdRoute: AgentsDotmdRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiVaultFoldersRoute: ApiVaultFoldersRoute,
+  ApiVaultSearchRoute: ApiVaultSearchRoute,
   ApiVaultTreeRoute: ApiVaultTreeRoute,
   ApiVaultIndexRoute: ApiVaultIndexRoute,
   ApiVaultIndexStatsRoute: ApiVaultIndexStatsRoute,
   ApiVaultNotesSlugRoute: ApiVaultNotesSlugRoute,
+  ApiVaultNotesByPathRoute: ApiVaultNotesByPathRoute,
+  ApiVaultNotesNeighborhoodRoute: ApiVaultNotesNeighborhoodRoute,
+  ApiVaultNotesIndexRoute: ApiVaultNotesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
