@@ -4,14 +4,18 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   __resetVaultServiceForTests,
+  createVaultFolder,
+  createVaultNote,
   getVaultBrowseData,
   getFolderListing,
   getNoteByPath,
   getNoteNeighborhoodByPath,
   getNoteBySlug,
   getVaultIndex,
+  searchVaultNotes,
   getVaultTree,
   rebuildVaultIndex,
+  updateVaultNote,
 } from './service'
 
 const ORIGINAL_KNOWLEDGE_PATH = process.env.KNOWLEDGE_PATH
@@ -406,5 +410,88 @@ describe('vault service', () => {
     expect(browse.folder.path).toBe('ideas')
     expect(browse.selectedNoteSlug).toBe('shared')
     expect(browse.note?.relPath).toBe('ideas/a.md')
+  })
+
+  it('creates folders with deterministic created semantics', async () => {
+    await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+    })
+
+    const created = await createVaultFolder('projects/nabu/specs')
+    const existing = await createVaultFolder('projects/nabu/specs')
+
+    expect(created).toMatchObject({
+      path: 'projects/nabu/specs',
+      created: true,
+    })
+    expect(existing).toMatchObject({
+      path: 'projects/nabu/specs',
+      created: false,
+    })
+  })
+
+  it('creates notes and makes them immediately retrievable and searchable', async () => {
+    await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+    })
+
+    const created = await createVaultNote({
+      path: 'projects/nabu/specs/agent-operability',
+      rawMarkdown: '# Agent Operability\n\nWrite surfaces for agents.',
+    })
+    const fetched = await getNoteByPath('projects/nabu/specs/agent-operability.md')
+    const search = await searchVaultNotes({
+      query: 'operability',
+    })
+
+    expect(created.note.relPath).toBe('projects/nabu/specs/agent-operability.md')
+    expect(fetched?.note.body).toContain('Write surfaces for agents.')
+    expect(search.total).toBe(1)
+    expect(search.results[0]?.relPath).toBe('projects/nabu/specs/agent-operability.md')
+  })
+
+  it('rejects note creation when the target already exists', async () => {
+    await createVaultFixture({
+      'projects/nabu/specs/agent-operability.md': '# Existing',
+    })
+
+    await expect(
+      createVaultNote({
+        path: 'projects/nabu/specs/agent-operability.md',
+        rawMarkdown: '# New content',
+      }),
+    ).rejects.toThrow('Note already exists')
+  })
+
+  it('updates notes and makes updated content immediately searchable', async () => {
+    await createVaultFixture({
+      'projects/nabu/specs/agent-operability.md': '# Agent Operability\n\nInitial content.',
+    })
+
+    const updated = await updateVaultNote({
+      path: 'projects/nabu/specs/agent-operability.md',
+      rawMarkdown: '# Agent Operability\n\nUpdated memory model.',
+    })
+    const fetched = await getNoteByPath('projects/nabu/specs/agent-operability.md')
+    const search = await searchVaultNotes({
+      query: 'updated memory model',
+    })
+
+    expect(updated.note.body).toContain('Updated memory model.')
+    expect(fetched?.note.body).toContain('Updated memory model.')
+    expect(search.results[0]?.relPath).toBe('projects/nabu/specs/agent-operability.md')
+  })
+
+  it('rejects note updates when the target note is missing', async () => {
+    await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+    })
+
+    await expect(
+      updateVaultNote({
+        path: 'projects/nabu/specs/missing.md',
+        rawMarkdown: '# Missing',
+      }),
+    ).rejects.toThrow('Note not found')
   })
 })

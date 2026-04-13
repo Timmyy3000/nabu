@@ -101,3 +101,62 @@ describe('GET /api/vault/notes/by-path', () => {
     })
   })
 })
+
+describe('PUT /api/vault/notes/by-path', () => {
+  it('returns 401 when request is unauthenticated', async () => {
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const handler = Route.options.server.handlers.PUT
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          path: 'projects/nabu/roadmap.md',
+          rawMarkdown: '# Updated',
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(payload).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('updates note payload when request is authenticated', async () => {
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const handler = Route.options.server.handlers.PUT
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+        body: JSON.stringify({
+          path: 'projects/nabu/roadmap.md',
+          rawMarkdown: '# Roadmap\n\nUpdated.',
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      builtAt: expect.any(String),
+      updated: true,
+      note: {
+        relPath: 'projects/nabu/roadmap.md',
+        body: '# Roadmap\n\nUpdated.',
+      },
+    })
+  })
+})

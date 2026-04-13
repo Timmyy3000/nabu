@@ -18,4 +18,9 @@ describe('normalizeVaultPath', () => {
     expect(() => normalizeVaultPath('../secrets.md')).toThrow('Path traversal segments are not allowed.')
     expect(() => normalizeVaultPath('ideas/../secrets.md')).toThrow('Path traversal segments are not allowed.')
   })
+
+  it('throws for absolute paths', () => {
+    expect(() => normalizeVaultPath('/etc/passwd')).toThrow('Absolute paths are not allowed.')
+    expect(() => normalizeVaultPath('C:\\vault\\note.md')).toThrow('Absolute paths are not allowed.')
+  })
 })

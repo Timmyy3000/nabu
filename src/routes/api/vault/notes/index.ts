@@ -1,20 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { getVaultNoteByPathResponse, updateVaultNoteByPathResponse } from '../../../../lib/vault/service'
+import { createVaultNoteResponse } from '../../../../lib/vault/service'
 
-export const Route = createFileRoute('/api/vault/notes/by-path')({
+export const Route = createFileRoute('/api/vault/notes/')({
   server: {
     handlers: {
-      GET: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
-        }
-
-        const url = new URL(request.url)
-        return getVaultNoteByPathResponse(url.searchParams.get('path'))
-      },
-      PUT: async ({ request }) => {
+      POST: async ({ request }) => {
         const { requireAuthenticatedApiRequest } = await import('../../../../lib/auth/session')
         const unauthorizedResponse = requireAuthenticatedApiRequest(request)
         if (unauthorizedResponse) {
@@ -35,7 +25,7 @@ export const Route = createFileRoute('/api/vault/notes/by-path')({
         }
 
         const payload = body as { path?: string | null; rawMarkdown?: string | null }
-        return updateVaultNoteByPathResponse({
+        return createVaultNoteResponse({
           path: payload.path ?? null,
           rawMarkdown: payload.rawMarkdown ?? null,
         })

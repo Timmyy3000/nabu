@@ -18,6 +18,7 @@ import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
 import { Route as ApiVaultSearchRouteImport } from './routes/api/vault/search'
 import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiVaultNotesIndexRouteImport } from './routes/api/vault/notes/index'
 import { Route as ApiVaultNotesNeighborhoodRouteImport } from './routes/api/vault/notes/neighborhood'
 import { Route as ApiVaultNotesByPathRouteImport } from './routes/api/vault/notes/by-path'
 import { Route as ApiVaultNotesSlugRouteImport } from './routes/api/vault/notes/$slug'
@@ -68,6 +69,11 @@ const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
   path: '/api/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVaultNotesIndexRoute = ApiVaultNotesIndexRouteImport.update({
+  id: '/api/vault/notes/',
+  path: '/api/vault/notes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiVaultNotesNeighborhoodRoute =
   ApiVaultNotesNeighborhoodRouteImport.update({
     id: '/api/vault/notes/neighborhood',
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
   '/api/vault/notes/by-path': typeof ApiVaultNotesByPathRoute
   '/api/vault/notes/neighborhood': typeof ApiVaultNotesNeighborhoodRoute
+  '/api/vault/notes/': typeof ApiVaultNotesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
   '/api/vault/notes/by-path': typeof ApiVaultNotesByPathRoute
   '/api/vault/notes/neighborhood': typeof ApiVaultNotesNeighborhoodRoute
+  '/api/vault/notes': typeof ApiVaultNotesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/api/vault/notes/$slug': typeof ApiVaultNotesSlugRoute
   '/api/vault/notes/by-path': typeof ApiVaultNotesByPathRoute
   '/api/vault/notes/neighborhood': typeof ApiVaultNotesNeighborhoodRoute
+  '/api/vault/notes/': typeof ApiVaultNotesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/api/vault/notes/$slug'
     | '/api/vault/notes/by-path'
     | '/api/vault/notes/neighborhood'
+    | '/api/vault/notes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/api/vault/notes/$slug'
     | '/api/vault/notes/by-path'
     | '/api/vault/notes/neighborhood'
+    | '/api/vault/notes'
   id:
     | '__root__'
     | '/'
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '/api/vault/notes/$slug'
     | '/api/vault/notes/by-path'
     | '/api/vault/notes/neighborhood'
+    | '/api/vault/notes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   ApiVaultNotesSlugRoute: typeof ApiVaultNotesSlugRoute
   ApiVaultNotesByPathRoute: typeof ApiVaultNotesByPathRoute
   ApiVaultNotesNeighborhoodRoute: typeof ApiVaultNotesNeighborhoodRoute
+  ApiVaultNotesIndexRoute: typeof ApiVaultNotesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vault/notes/': {
+      id: '/api/vault/notes/'
+      path: '/api/vault/notes'
+      fullPath: '/api/vault/notes/'
+      preLoaderRoute: typeof ApiVaultNotesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/vault/notes/neighborhood': {
       id: '/api/vault/notes/neighborhood'
       path: '/api/vault/notes/neighborhood'
@@ -310,6 +330,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiVaultNotesSlugRoute: ApiVaultNotesSlugRoute,
   ApiVaultNotesByPathRoute: ApiVaultNotesByPathRoute,
   ApiVaultNotesNeighborhoodRoute: ApiVaultNotesNeighborhoodRoute,
+  ApiVaultNotesIndexRoute: ApiVaultNotesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

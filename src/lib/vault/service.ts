@@ -2,7 +2,14 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
 import { getVaultConfig } from './config'
-import { listMarkdownFiles } from './filesystem'
+import {
+  createVaultFolder as createVaultFolderOnDisk,
+  createVaultMarkdownFile,
+  listMarkdownFiles,
+  updateVaultMarkdownFile,
+  VaultFileAlreadyExistsError,
+  VaultFileNotFoundError,
+} from './filesystem'
 import { buildVaultIndex } from './index'
 import { parseNote, type ParsedVaultNote, type VaultNoteLink } from './parse-note'
 import {
@@ -77,6 +84,29 @@ type VaultBrowseData = {
   folder: VaultFolderListing
   selectedNoteSlug: string | null
   note: VaultNotePayload | null
+}
+
+type VaultFolderCreateResult = {
+  path: string
+  created: boolean
+  builtAt: string
+}
+
+type VaultNoteWriteInput = {
+  path: string | null | undefined
+  rawMarkdown: string | null | undefined
+}
+
+type VaultNoteCreateResult = {
+  builtAt: string
+  created: true
+  note: VaultNotePayload
+}
+
+type VaultNoteUpdateResult = {
+  builtAt: string
+  updated: true
+  note: VaultNotePayload
 }
 
 type VaultSearchInput = {
@@ -319,6 +349,42 @@ function normalizeNotePathInput(notePath: string | null | undefined): string {
   return normalizeVaultPath(trimmed)
 }
 
+function normalizeFolderCreatePathInput(folderPath: string | null | undefined): string {
+  if (folderPath == null) {
+    throw new Error('Folder path is required')
+  }
+
+  const trimmed = folderPath.trim()
+  if (!trimmed) {
+    throw new Error('Folder path is required')
+  }
+
+  return normalizeVaultPath(trimmed)
+}
+
+function normalizeMarkdownNotePathInput(notePath: string | null | undefined): string {
+  const normalized = normalizeNotePathInput(notePath)
+  const withMarkdownExtension = normalized.toLowerCase().endsWith('.md') ? normalized : `${normalized}.md`
+
+  if (withMarkdownExtension.endsWith('/.md') || withMarkdownExtension === '.md') {
+    throw new Error('Note path must target a markdown file')
+  }
+
+  return withMarkdownExtension
+}
+
+function normalizeRawMarkdownInput(rawMarkdown: string | null | undefined): string {
+  if (typeof rawMarkdown !== 'string') {
+    throw new Error('Raw markdown is required')
+  }
+
+  if (!rawMarkdown.trim()) {
+    throw new Error('Raw markdown is required')
+  }
+
+  return rawMarkdown
+}
+
 function createFolderName(folderPath: string): string {
   if (!folderPath) {
     return ''
@@ -547,6 +613,81 @@ export async function getVaultBrowseData(input: {
     folder: folderListing,
     selectedNoteSlug,
     note: selectedNote,
+  }
+}
+
+async function readNoteFromRebuiltIndex(relPath: string): Promise<{ index: LoadedVaultIndex; note: VaultNotePayload }> {
+  const index = await rebuildVaultIndex()
+  const parsed = index.byRelPath.get(relPath)
+
+  if (!parsed) {
+    throw new Error(`Expected note "${relPath}" to exist after write`)
+  }
+
+  return {
+    index,
+    note: toVaultNotePayload(parsed, getNoteBacklinks(index, relPath)),
+  }
+}
+
+export async function createVaultFolder(folderPathInput: string): Promise<VaultFolderCreateResult> {
+  const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
+  const { rootPath } = await getVaultConfig()
+  const created = await createVaultFolderOnDisk(rootPath, normalizedPath)
+  const index = await rebuildVaultIndex()
+
+  return {
+    path: normalizedPath,
+    created,
+    builtAt: index.builtAt,
+  }
+}
+
+export async function createVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteCreateResult> {
+  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+  const rawMarkdown = normalizeRawMarkdownInput(input.rawMarkdown)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+  } catch (error) {
+    if (error instanceof VaultFileAlreadyExistsError) {
+      throw new Error(`Note already exists: ${normalizedPath}`)
+    }
+
+    throw error
+  }
+
+  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
+
+  return {
+    builtAt: index.builtAt,
+    created: true,
+    note,
+  }
+}
+
+export async function updateVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteUpdateResult> {
+  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+  const rawMarkdown = normalizeRawMarkdownInput(input.rawMarkdown)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await updateVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+  } catch (error) {
+    if (error instanceof VaultFileNotFoundError) {
+      throw new Error(`Note not found: ${normalizedPath}`)
+    }
+
+    throw error
+  }
+
+  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
+
+  return {
+    builtAt: index.builtAt,
+    updated: true,
+    note,
   }
 }
 
@@ -781,6 +922,85 @@ export async function getVaultNoteNeighborhoodResponse(pathInput: string | null 
     builtAt: index.builtAt,
     ...getNoteNeighborhood(index, note),
   })
+}
+
+export async function createVaultFolderResponse(input: { path: string | null | undefined }): Promise<Response> {
+  let created: VaultFolderCreateResult
+
+  try {
+    created = await createVaultFolder(input.path ?? '')
+  } catch {
+    return Response.json(
+      {
+        error: 'Invalid folder path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+
+  return Response.json(
+    {
+      builtAt: created.builtAt,
+      folder: {
+        path: created.path,
+        created: created.created,
+      },
+    },
+    { status: created.created ? 201 : 200 },
+  )
+}
+
+export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promise<Response> {
+  try {
+    const created = await createVaultNote(input)
+    return Response.json(created, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note already exists: ')) {
+      const notePath = error.message.replace('Note already exists: ', '')
+      return Response.json(
+        {
+          error: 'Note already exists',
+          path: notePath,
+        },
+        { status: 409 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+}
+
+export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput): Promise<Response> {
+  try {
+    const updated = await updateVaultNote(input)
+    return Response.json(updated)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note not found: ')) {
+      const notePath = error.message.replace('Note not found: ', '')
+      return Response.json(
+        {
+          error: 'Note not found',
+          path: notePath,
+        },
+        { status: 404 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
 }
 
 export function __resetVaultServiceForTests() {
