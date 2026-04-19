@@ -2,6 +2,18 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.4.2] - 2026-04-19
+
+Launch cleanup release.
+
+### Shipped
+
+- Removed the obsolete `design/nabu_redesign.html` standalone mock now that the redesign has already been shipped into the real product
+
+### Why it matters
+
+The redesign should live in Nabu itself, not in a stale HTML artifact sitting beside the product. This release trims that leftover file and keeps the repo aligned with the real shipped surface.
+
 ## [0.4.1] - 2026-04-19
 
 Launch readiness release.
