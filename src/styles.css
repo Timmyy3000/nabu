@@ -721,6 +721,7 @@ pre,
   font-size: 11.5px;
   line-height: 1.6;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .stat-grid {
@@ -759,14 +760,21 @@ pre,
 .drawer-list li {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .drawer-list a {
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .drawer-list a:hover {
   color: var(--accent);
+}
+
+.drawer-note,
+.meta-inline {
+  overflow-wrap: anywhere;
 }
 
 .reader-empty {

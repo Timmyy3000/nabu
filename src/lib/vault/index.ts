@@ -214,6 +214,7 @@ function resolveOutgoingLink(input: {
     resolved: true,
     targetRelPath: targetNote.relPath,
     targetSlug: targetNote.slug,
+    targetTitle: targetNote.title,
   }
 }
 
@@ -359,6 +360,7 @@ export function buildVaultIndex(
             target: link.target,
             targetRelPath: link.targetRelPath,
             targetSlug: link.targetSlug,
+            targetTitle: link.targetTitle,
           },
         ]
       })

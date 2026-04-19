@@ -166,6 +166,7 @@ describe('vault service', () => {
         resolved: true,
         targetRelPath: 'projects/roadmap.md',
         targetSlug: 'roadmap',
+        targetTitle: 'Roadmap',
       },
       {
         raw: '[Roadmap Doc](../projects/roadmap.md)',
@@ -175,6 +176,7 @@ describe('vault service', () => {
         resolved: true,
         targetRelPath: 'projects/roadmap.md',
         targetSlug: 'roadmap',
+        targetTitle: 'Roadmap',
       },
       {
         raw: '[[Missing]]',
@@ -238,14 +240,23 @@ describe('vault service', () => {
         {
           targetRelPath: 'projects/roadmap.md',
           targetSlug: 'roadmap',
+          targetTitle: 'Product Roadmap',
         },
         {
           targetRelPath: 'projects/tasks.md',
           targetSlug: 'tasks',
+          targetTitle: 'Tasks',
         },
         {
           targetRelPath: 'projects/vision.md',
           targetSlug: 'vision',
+          targetTitle: 'Vision',
+        },
+      ],
+      unresolvedOutgoing: [
+        {
+          raw: '[[missing]]',
+          target: 'missing',
         },
       ],
       stats: {
