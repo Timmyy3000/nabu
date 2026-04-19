@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { AgentsPage } from '../pages/agents'
 
@@ -10,18 +10,7 @@ const getAuthStatus = createServerFn({ method: 'GET' }).handler(async ({ request
 })
 
 export const Route = createFileRoute('/agents.md')({
-  beforeLoad: async ({ location }) => {
-    const auth = await getAuthStatus()
-
-    if (!auth.authenticated) {
-      throw redirect({
-        to: '/login',
-        search: {
-          redirect: `${location.pathname}${location.searchStr}${location.hash}`,
-        },
-      })
-    }
-  },
+  loader: async () => getAuthStatus(),
   head: () => ({
     meta: [
       {
@@ -33,5 +22,10 @@ export const Route = createFileRoute('/agents.md')({
       },
     ],
   }),
-  component: AgentsPage,
+  component: AgentsRoute,
 })
+
+function AgentsRoute() {
+  const auth = Route.useLoaderData()
+  return <AgentsPage authenticated={auth.authenticated} />
+}
