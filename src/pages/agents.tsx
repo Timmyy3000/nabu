@@ -4,15 +4,29 @@ type AgentsPageProps = {
   authenticated: boolean
 }
 
+function AgentsLayout({ children, eyebrow }: { children: React.ReactNode; eyebrow: string }) {
+  return (
+    <section className="route-page docs-page">
+      <article className="docs-surface agents-doc">
+        <div className="wordmark docs-wordmark" aria-label="𒀭 nabu">
+          <span className="wedge">𒀭</span>
+          <span className="wordmark-text">nabu</span>
+        </div>
+        <p className="section-label">{eyebrow}</p>
+        {children}
+      </article>
+    </section>
+  )
+}
+
 export function AgentsPage({ authenticated }: AgentsPageProps) {
   const bootstrap = getAgentBootstrapContract()
 
   if (!authenticated) {
     return (
-      <article className="agents-doc panel">
-        <p className="eyebrow">Nabu</p>
+      <AgentsLayout eyebrow="public bootstrap">
         <h1>/agents.md</h1>
-        <p className="muted">Public bootstrap contract for agents. Authenticate first; the full contract is available after login.</p>
+        <p className="docs-lede">Public bootstrap contract for agents. Authenticate first; the full contract is available after login.</p>
 
         <h2>Authentication</h2>
         <p>Use a normal HTTP form POST. Browser automation should not be required.</p>
@@ -50,15 +64,14 @@ export function AgentsPage({ authenticated }: AgentsPageProps) {
           If you are calling Nabu as an agent, prefer <code>/api/agent/bootstrap</code> first, then authenticate, then return to
           <code> /agents.md</code> for the full contract.
         </p>
-      </article>
+      </AgentsLayout>
     )
   }
 
   return (
-    <article className="agents-doc panel">
-      <p className="eyebrow">Nabu</p>
+    <AgentsLayout eyebrow="agent contract">
       <h1>/agents.md</h1>
-      <p className="muted">Markdown-native knowledge OS for humans and agents.</p>
+      <p className="docs-lede">Markdown-native knowledge OS for humans and agents.</p>
 
       <h2>Purpose</h2>
       <p>This page is the starting point for agents using this Nabu instance. Humans can read it too.</p>
@@ -185,6 +198,6 @@ export function AgentsPage({ authenticated }: AgentsPageProps) {
         <li>No browser editing UI yet.</li>
         <li>This hosted surface is now read-write for basic folder and markdown note operations.</li>
       </ul>
-    </article>
+    </AgentsLayout>
   )
 }

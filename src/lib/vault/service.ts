@@ -88,6 +88,7 @@ type VaultBrowseData = {
   folder: VaultFolderListing
   selectedNoteSlug: string | null
   note: VaultNotePayload | null
+  noteNeighborhood: VaultNoteNeighborhood | null
 }
 
 type VaultFolderCreateResult = {
@@ -597,6 +598,7 @@ export async function getVaultBrowseData(input: {
   const requestedSlug = normalizeSlugInput(input.noteSlug ?? '')
   let selectedNoteSlug: string | null = null
   let selectedNote: VaultNotePayload | null = null
+  let noteNeighborhood: VaultNoteNeighborhood | null = null
 
   if (requestedSlug) {
     const matchingNoteInFolder = folderListing.notes.find((note) => note.slug === requestedSlug)
@@ -607,6 +609,7 @@ export async function getVaultBrowseData(input: {
     if (requestedNote && isNoteInFolder(requestedNote.relPath, folderListing.path)) {
       selectedNoteSlug = requestedSlug
       selectedNote = toVaultNotePayload(requestedNote, getNoteBacklinks(index, requestedNote.relPath))
+      noteNeighborhood = getNoteNeighborhood(index, requestedNote)
     }
   }
 
@@ -616,6 +619,7 @@ export async function getVaultBrowseData(input: {
       selectedNoteSlug = fallback.slug
       const parsed = index.byRelPath.get(fallback.relPath)
       selectedNote = parsed ? toVaultNotePayload(parsed, getNoteBacklinks(index, parsed.relPath)) : null
+      noteNeighborhood = parsed ? getNoteNeighborhood(index, parsed) : null
     }
   }
 
@@ -624,6 +628,7 @@ export async function getVaultBrowseData(input: {
     folder: folderListing,
     selectedNoteSlug,
     note: selectedNote,
+    noteNeighborhood,
   }
 }
 
