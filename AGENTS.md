@@ -48,9 +48,9 @@ Use `scratchpad/` for temporary working material:
 Do not overengineer early.
 
 Current bias:
-- React + Vite for frontend
-- TanStack Router and TanStack Query
-- lightweight backend for filesystem access and auth
+- TanStack Start as the integrated app runtime
+- React + TanStack Router and TanStack Query for the UI layer
+- server routes for filesystem access, indexing, auth, and agent-facing APIs
 - filesystem-mounted markdown vault outside the repo
 
 ### 6. Protect the product idea

@@ -15,6 +15,11 @@ tags:
 summary: ' Shared notes for agents. '
 createdAt: '2026-04-09'
 updatedAt: '2026-04-09T10:20:30Z'
+author: ' Claude '
+source: ' https://example.com/article '
+references:
+  - projects/nabu/roadmap.md
+  - indexing-primitives
 ---
 # Heading
 \nBody text.
@@ -28,6 +33,9 @@ updatedAt: '2026-04-09T10:20:30Z'
       slug: 'agent-memory-v1',
       summary: 'Shared notes for agents.',
       tags: ['ai', 'memory'],
+      authors: ['Claude'],
+      source: 'https://example.com/article',
+      references: ['projects/nabu/roadmap.md', 'indexing-primitives'],
       createdAt: '2026-04-09',
       updatedAt: '2026-04-09T10:20:30.000Z',
       frontmatter: {
@@ -48,15 +56,43 @@ updatedAt: '2026-04-09T10:20:30Z'
     expect(note).toMatchObject({
       id: 'projects/nabu/roadmap.md',
       relPath: 'projects/nabu/roadmap.md',
-      title: 'roadmap',
+      title: 'Roadmap',
       slug: 'roadmap',
       summary: null,
       tags: [],
+      authors: [],
+      source: null,
+      references: [],
       createdAt: null,
       updatedAt: null,
       frontmatter: {},
       body: '# Roadmap\n',
       warnings: [],
+    })
+  })
+
+  it('extracts standardized metadata from the existing body convention when frontmatter is absent', () => {
+    const note = parseNote({
+      relPath: 'resources/observability/traditional-logging-breaks-down-in-distributed-systems.md',
+      rawMarkdown: `# Traditional logging breaks down in distributed systems
+
+**TL;DR:** Distributed systems make scattered log lines useless.
+
+**Author:** claude-opus-4.6
+**Source:** https://loggingsucks.com/ — Boris Tane
+**Tags:** observability, logging, distributed-systems, concept
+**References:** [[wide-events-replace-scattered-log-lines]], [[tail-sampling-controls-observability-costs]]
+`,
+    })
+
+    expect(note).toMatchObject({
+      title: 'Traditional logging breaks down in distributed systems',
+      slug: 'traditional-logging-breaks-down-in-distributed-systems',
+      summary: 'Distributed systems make scattered log lines useless.',
+      authors: ['claude-opus-4.6'],
+      source: 'https://loggingsucks.com/ — Boris Tane',
+      tags: ['concept', 'distributed-systems', 'logging', 'observability'],
+      references: ['wide-events-replace-scattered-log-lines', 'tail-sampling-controls-observability-costs'],
     })
   })
 
