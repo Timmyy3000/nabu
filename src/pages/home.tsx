@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { VaultNoteLink } from '../lib/vault/parse-note'
 import type { VaultBrowseData, VaultFolderTreeNode, VaultSearchResponse } from '../lib/vault/service'
 
 function getParentFolderPath(relPath: string): string {
@@ -11,6 +12,39 @@ function getParentFolderPath(relPath: string): string {
   }
 
   return parts.slice(0, -1).join('/')
+}
+
+function buildNoteHref(relPath: string, slug: string): string {
+  const params = new URLSearchParams({
+    folder: getParentFolderPath(relPath),
+    note: slug,
+  })
+
+  return `/?${params.toString()}`
+}
+
+function getResolvedLinkLabel(link: VaultNoteLink): string {
+  if (link.text) {
+    return link.text
+  }
+
+  const target = link.target.split('/').pop() ?? link.target
+  return target.replace(/\.md$/i, '')
+}
+
+function toRenderedMarkdown(body: string, outgoingLinks: VaultNoteLink[]): string {
+  let nextBody = body
+
+  for (const link of outgoingLinks) {
+    if (!link.resolved || !link.targetRelPath || !link.targetSlug) {
+      continue
+    }
+
+    const replacement = `[${getResolvedLinkLabel(link)}](${buildNoteHref(link.targetRelPath, link.targetSlug)})`
+    nextBody = nextBody.split(link.raw).join(replacement)
+  }
+
+  return nextBody
 }
 
 export function HomePage({
@@ -159,10 +193,20 @@ export function HomePage({
           <>
             <header className="note-head">
               <h2>{browse.note.title}</h2>
-              <p className="muted note-meta">{browse.note.relPath}</p>
+              <p className="muted note-meta">
+                <button
+                  type="button"
+                  className="note-path-button"
+                  aria-label="Copy note path"
+                  title="Copy note path"
+                  onClick={() => void navigator.clipboard?.writeText(browse.note!.relPath)}
+                >
+                  {browse.note.relPath}
+                </button>
+              </p>
             </header>
             <div className="note-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{browse.note.body}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{toRenderedMarkdown(browse.note.body, browse.note.outgoingLinks)}</ReactMarkdown>
             </div>
           </>
         ) : (

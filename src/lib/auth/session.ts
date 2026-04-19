@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { AUTH_COOKIE_NAME } from './constants'
 
-export const AUTH_COOKIE_NAME = 'nabu_session'
+export { AUTH_COOKIE_NAME }
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 type SessionPayload = {
