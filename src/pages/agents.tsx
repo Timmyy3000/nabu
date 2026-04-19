@@ -1,4 +1,59 @@
-export function AgentsPage() {
+import { getAgentBootstrapContract } from '../lib/agent/bootstrap'
+
+type AgentsPageProps = {
+  authenticated: boolean
+}
+
+export function AgentsPage({ authenticated }: AgentsPageProps) {
+  const bootstrap = getAgentBootstrapContract()
+
+  if (!authenticated) {
+    return (
+      <article className="agents-doc panel">
+        <p className="eyebrow">Nabu</p>
+        <h1>/agents.md</h1>
+        <p className="muted">Public bootstrap contract for agents. Authenticate first; the full contract is available after login.</p>
+
+        <h2>Authentication</h2>
+        <p>Use a normal HTTP form POST. Browser automation should not be required.</p>
+        <ul>
+          <li>
+            <code>{`${bootstrap.auth.method} ${bootstrap.auth.endpoint}`}</code>
+          </li>
+          <li>
+            <strong>Content-Type:</strong> <code>{bootstrap.auth.contentType}</code>
+          </li>
+          <li>
+            <strong>Fields:</strong> <code>{bootstrap.auth.fields.join(', ')}</code>
+          </li>
+          <li>
+            <strong>Session cookie:</strong> <code>{bootstrap.auth.cookieName}</code>
+          </li>
+          <li>
+            <strong>Success:</strong> {bootstrap.auth.redirectBehavior}
+          </li>
+        </ul>
+
+        <h2>Canonical identity</h2>
+        <ul>
+          <li>{bootstrap.identity.note}</li>
+          <li>
+            Use <code>{bootstrap.identity.deterministicRead}</code> for deterministic reads.
+          </li>
+          <li>
+            <code>{bootstrap.identity.convenienceRead}</code> is convenience-only and may collide.
+          </li>
+        </ul>
+
+        <h2>Machine-readable bootstrap</h2>
+        <p>
+          If you are calling Nabu as an agent, prefer <code>/api/agent/bootstrap</code> first, then authenticate, then return to
+          <code> /agents.md</code> for the full contract.
+        </p>
+      </article>
+    )
+  }
+
   return (
     <article className="agents-doc panel">
       <p className="eyebrow">Nabu</p>
@@ -9,8 +64,23 @@ export function AgentsPage() {
       <p>This page is the starting point for agents using this Nabu instance. Humans can read it too.</p>
 
       <h2>Authentication</h2>
-      <p>This hosted instance uses shared-password auth. Authenticate via `/login`, then use the browser session cookie.</p>
-      <p>Protected routes return `401 Unauthorized` if the session is missing or expired.</p>
+      <p>Authenticate with a normal HTTP request, not browser automation.</p>
+      <ul>
+        <li>
+          <code>{`${bootstrap.auth.method} ${bootstrap.auth.endpoint}`}</code>
+        </li>
+        <li>
+          <strong>Content-Type:</strong> <code>{bootstrap.auth.contentType}</code>
+        </li>
+        <li>
+          <strong>Fields:</strong> <code>{bootstrap.auth.fields.join(', ')}</code>
+        </li>
+        <li>
+          <strong>Cookie:</strong> <code>{bootstrap.auth.cookieName}</code>
+        </li>
+        <li>Reuse the session cookie on subsequent API requests.</li>
+        <li>Protected routes return `401 Unauthorized` if the session is missing or expired.</li>
+      </ul>
 
       <h2>Read Surfaces</h2>
       <ul>
@@ -46,11 +116,18 @@ export function AgentsPage() {
           <code>POST /api/vault/folders</code>: create a folder. JSON body: <code>{'{"path":"projects/nabu/specs"}'}</code>
         </li>
         <li>
-          <code>POST /api/vault/notes</code>: create a markdown note. JSON body: <code>{'{"path":"projects/nabu/specs/agent-operability","rawMarkdown":"# Agent Operability"}'}</code>
+          <code>POST /api/vault/notes</code>: create a markdown note. JSON body: <code>{'{"path":"projects/nabu/specs/agent-operability","rawMarkdown":"---\ntitle: Agent Operability\ntags: [agents]\n---\n# Agent Operability"}'}</code>
         </li>
         <li>
-          <code>PUT /api/vault/notes/by-path</code>: update an existing markdown note. JSON body: <code>{'{"path":"projects/nabu/specs/agent-operability.md","rawMarkdown":"# Agent Operability\n\nUpdated"}'}</code>
+          <code>PUT /api/vault/notes/by-path</code>: update an existing markdown note. JSON body: <code>{'{"path":"projects/nabu/specs/agent-operability.md","rawMarkdown":"---\ntitle: Agent Operability\nupdatedAt: 2026-04-14T00:00:00Z\n---\n# Agent Operability\n\nUpdated"}'}</code>
         </li>
+      </ul>
+
+      <h2>Metadata Conventions</h2>
+      <ul>
+        <li>Frontmatter is the canonical metadata surface.</li>
+        <li>Recommended fields: <code>title</code>, <code>summary</code>, <code>tags</code>, <code>author</code>/<code>authors</code>, <code>source</code>, <code>references</code>, <code>createdAt</code>, <code>updatedAt</code>.</li>
+        <li>Legacy body conventions like <code>**TL;DR:**</code>, <code>**Author:**</code>, <code>**Source:**</code>, and <code>**Tags:**</code> are parsed for backward compatibility, but new notes should prefer frontmatter.</li>
       </ul>
 
       <h2>Write Semantics</h2>
@@ -86,16 +163,15 @@ export function AgentsPage() {
       <h2>Response Conventions</h2>
       <ul>
         <li>When referencing a note, cite `relPath` and `title` together.</li>
-        <li>Use note `body` when exact wording matters.</li>
-        <li>Frontmatter is metadata; prose intent is in the markdown body.</li>
+        <li>Use structured metadata fields when available; fall back to `body` when exact wording matters.</li>
         <li>Be explicit about summary vs direct quote.</li>
       </ul>
 
       <h2>Recommended Agent Workflows</h2>
       <ol>
-        <li>Read `/agents.md`.</li>
-        <li>Authenticate via `/login` and keep the session cookie.</li>
-        <li>Use `/api/vault/tree` or `/api/vault/folders?path=...` to inspect the target location.</li>
+        <li>Fetch <code>/api/agent/bootstrap</code> or read the public bootstrap at <code>/agents.md</code>.</li>
+        <li>Authenticate via <code>/api/auth/login</code> and reuse the session cookie.</li>
+        <li>Use <code>/api/vault/tree</code> or <code>/api/vault/folders?path=...</code> to inspect the target location.</li>
         <li>Create missing folders with <code>POST /api/vault/folders</code>.</li>
         <li>Create notes with <code>POST /api/vault/notes</code> or update notes with <code>PUT /api/vault/notes/by-path</code>.</li>
         <li>Verify with <code>GET /api/vault/notes/by-path?path=...</code>.</li>
