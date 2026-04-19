@@ -27,7 +27,7 @@ describe('buildVaultIndex', () => {
     const notes = [note('projects/nabu/roadmap.md', '# Roadmap')]
     const index = buildVaultIndex(notes)
 
-    expect(index.byRelPath.get('projects/nabu/roadmap.md')?.title).toBe('roadmap')
+    expect(index.byRelPath.get('projects/nabu/roadmap.md')?.title).toBe('Roadmap')
     expect(index.byRelPath.get('projects/missing.md')).toBeUndefined()
   })
 
@@ -221,7 +221,7 @@ describe('buildVaultIndex', () => {
       {
         sourceRelPath: 'ideas/source-a.md',
         sourceSlug: 'source-a',
-        sourceTitle: 'source-a',
+        sourceTitle: 'Source A',
         kind: 'markdown',
         text: 'Roadmap Doc',
         raw: '[Roadmap Doc](../projects/roadmap.md)',
@@ -229,7 +229,7 @@ describe('buildVaultIndex', () => {
       {
         sourceRelPath: 'ideas/source-a.md',
         sourceSlug: 'source-a',
-        sourceTitle: 'source-a',
+        sourceTitle: 'Source A',
         kind: 'wiki',
         text: null,
         raw: '[[Roadmap]]',
@@ -237,7 +237,7 @@ describe('buildVaultIndex', () => {
       {
         sourceRelPath: 'ideas/source-a.md',
         sourceSlug: 'source-a',
-        sourceTitle: 'source-a',
+        sourceTitle: 'Source A',
         kind: 'wiki',
         text: null,
         raw: '[[Roadmap]]',
@@ -245,7 +245,7 @@ describe('buildVaultIndex', () => {
       {
         sourceRelPath: 'ideas/source-b.md',
         sourceSlug: 'source-b',
-        sourceTitle: 'source-b',
+        sourceTitle: 'Source B',
         kind: 'wiki',
         text: null,
         raw: '[[projects/roadmap.md]]',

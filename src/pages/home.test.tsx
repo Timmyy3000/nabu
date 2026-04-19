@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomePage } from './home'
 
 vi.mock('@tanstack/react-router', () => ({
@@ -29,6 +29,8 @@ vi.mock('@tanstack/react-router', () => ({
     )
   },
 }))
+
+const writeText = vi.fn().mockResolvedValue(undefined)
 
 function buildBrowseFixture() {
   return {
@@ -72,13 +74,45 @@ function buildBrowseFixture() {
       title: 'alpha',
       summary: null,
       tags: [],
+      authors: [],
+      source: null,
+      references: [],
       createdAt: null,
       updatedAt: null,
       frontmatter: {},
-      body: '# Alpha',
+      body: '# Alpha\n\nSee [[beta]] and [Roadmap](../projects/roadmap.md).',
+      outgoingLinks: [
+        {
+          raw: '[[beta]]',
+          kind: 'wiki',
+          text: null,
+          target: 'beta',
+          resolved: true,
+          targetRelPath: 'ideas/beta.md',
+          targetSlug: 'beta',
+        },
+        {
+          raw: '[Roadmap](../projects/roadmap.md)',
+          kind: 'markdown',
+          text: 'Roadmap',
+          target: '../projects/roadmap.md',
+          resolved: true,
+          targetRelPath: 'projects/roadmap.md',
+          targetSlug: 'roadmap',
+        },
+      ],
+      backlinks: [],
     },
   }
 }
+
+beforeEach(() => {
+  Object.defineProperty(window.navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  })
+  writeText.mockClear()
+})
 
 describe('HomePage', () => {
   it('renders browse UI when no query is active', () => {
@@ -92,6 +126,21 @@ describe('HomePage', () => {
     expect(container.querySelectorAll('.vault-pane')).toHaveLength(3)
     expect(container.querySelector('.vault-pane-note')).toBeTruthy()
     expect(screen.getByText('ideas/alpha.md').closest('.note-meta')).toBeTruthy()
+  })
+
+  it('copies the canonical note path when the path label is clicked', () => {
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /copy note path/i }))
+
+    expect(writeText).toHaveBeenCalledWith('ideas/alpha.md')
+  })
+
+  it('renders internal wiki and markdown note links as app navigation links', () => {
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+
+    expect(screen.getByRole('link', { name: 'beta' }).getAttribute('href')).toContain('folder=ideas')
+    expect(screen.getByRole('link', { name: 'Roadmap' }).getAttribute('href')).toContain('folder=projects')
   })
 
   it('renders search results when query is present', () => {

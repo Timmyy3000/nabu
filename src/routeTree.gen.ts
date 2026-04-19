@@ -18,6 +18,7 @@ import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
 import { Route as ApiVaultSearchRouteImport } from './routes/api/vault/search'
 import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiAgentBootstrapRouteImport } from './routes/api/agent/bootstrap'
 import { Route as ApiVaultNotesIndexRouteImport } from './routes/api/vault/notes/index'
 import { Route as ApiVaultNotesNeighborhoodRouteImport } from './routes/api/vault/notes/neighborhood'
 import { Route as ApiVaultNotesByPathRouteImport } from './routes/api/vault/notes/by-path'
@@ -69,6 +70,11 @@ const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
   path: '/api/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAgentBootstrapRoute = ApiAgentBootstrapRouteImport.update({
+  id: '/api/agent/bootstrap',
+  path: '/api/agent/bootstrap',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiVaultNotesIndexRoute = ApiVaultNotesIndexRouteImport.update({
   id: '/api/vault/notes/',
   path: '/api/vault/notes/',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/api/agent/bootstrap': typeof ApiAgentBootstrapRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/api/agent/bootstrap': typeof ApiAgentBootstrapRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/api/agent/bootstrap': typeof ApiAgentBootstrapRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/agents.md'
     | '/login'
     | '/logout'
+    | '/api/agent/bootstrap'
     | '/api/auth/login'
     | '/api/vault/folders'
     | '/api/vault/search'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/agents.md'
     | '/login'
     | '/logout'
+    | '/api/agent/bootstrap'
     | '/api/auth/login'
     | '/api/vault/folders'
     | '/api/vault/search'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/agents.md'
     | '/login'
     | '/logout'
+    | '/api/agent/bootstrap'
     | '/api/auth/login'
     | '/api/vault/folders'
     | '/api/vault/search'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   AgentsDotmdRoute: typeof AgentsDotmdRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
+  ApiAgentBootstrapRoute: typeof ApiAgentBootstrapRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiVaultFoldersRoute: typeof ApiVaultFoldersRoute
   ApiVaultSearchRoute: typeof ApiVaultSearchRoute
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/agent/bootstrap': {
+      id: '/api/agent/bootstrap'
+      path: '/api/agent/bootstrap'
+      fullPath: '/api/agent/bootstrap'
+      preLoaderRoute: typeof ApiAgentBootstrapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/vault/notes/': {
       id: '/api/vault/notes/'
       path: '/api/vault/notes'
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsDotmdRoute: AgentsDotmdRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
+  ApiAgentBootstrapRoute: ApiAgentBootstrapRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiVaultFoldersRoute: ApiVaultFoldersRoute,
   ApiVaultSearchRoute: ApiVaultSearchRoute,

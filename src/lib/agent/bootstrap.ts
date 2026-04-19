@@ -1,4 +1,4 @@
-import { AUTH_COOKIE_NAME } from '../auth/session'
+import { AUTH_COOKIE_NAME } from '../auth/constants'
 
 export type AgentBootstrapContract = {
   auth: {
