@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'scratchpad'],
+    ignores: ['dist', '.output', '.tanstack', 'coverage', 'scratchpad'],
   },
   {
     files: ['**/*.{ts,tsx}'],

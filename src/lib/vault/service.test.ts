@@ -122,6 +122,32 @@ describe('vault service', () => {
     expect(missing).toBeNull()
   })
 
+  it('includes structured metadata fields in note retrieval payloads', async () => {
+    await createVaultFixture({
+      'ideas/agent-memory.md': [
+        '---',
+        'title: Agent Memory',
+        'author: Claude',
+        'source: https://example.com/agent-memory',
+        'references:',
+        '  - projects/roadmap.md',
+        '  - indexing-primitives',
+        '---',
+        '# Agent Memory',
+      ].join('\n'),
+    })
+
+    const found = await getNoteByPath('ideas/agent-memory.md')
+
+    expect(found?.note).toMatchObject({
+      relPath: 'ideas/agent-memory.md',
+      title: 'Agent Memory',
+      authors: ['Claude'],
+      source: 'https://example.com/agent-memory',
+      references: ['projects/roadmap.md', 'indexing-primitives'],
+    })
+  })
+
   it('includes outgoing links in note retrieval payloads', async () => {
     await createVaultFixture({
       'ideas/source.md': `[[Roadmap]]\n[Roadmap Doc](../projects/roadmap.md)\n[[Missing]]`,

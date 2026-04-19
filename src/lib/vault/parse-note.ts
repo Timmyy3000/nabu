@@ -1,6 +1,7 @@
 import path from 'node:path'
 import matter from 'gray-matter'
 import { normalizeVaultPath } from '../paths'
+import { normalizePathTitleSegment } from './title'
 
 export type VaultNoteLink = {
   raw: string
@@ -19,6 +20,9 @@ export type ParsedVaultNote = {
   title: string
   summary: string | null
   tags: string[]
+  authors: string[]
+  source: string | null
+  references: string[]
   createdAt: string | null
   updatedAt: string | null
   frontmatter: Record<string, unknown>
@@ -52,6 +56,11 @@ function normalizeText(value: unknown): string | null {
 
 function fallbackTitleFromPath(relPath: string): string {
   return path.basename(relPath, path.extname(relPath))
+}
+
+function extractHeadingTitle(body: string): string | null {
+  const match = body.match(/^#\s+(.+)$/m)
+  return normalizeText(match?.[1] ?? null)
 }
 
 function slugify(value: string): string {
@@ -91,6 +100,27 @@ function normalizeTags(value: unknown): string[] {
   }
 
   return [...seen].sort((left, right) => left.localeCompare(right))
+}
+
+function normalizeStringList(value: unknown): string[] {
+  const rawEntries = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : []
+
+  const seen = new Set<string>()
+
+  for (const rawEntry of rawEntries) {
+    const normalized = normalizeText(rawEntry)
+    if (!normalized) {
+      continue
+    }
+
+    seen.add(normalized)
+  }
+
+  return [...seen]
 }
 
 function normalizeDate(value: unknown): string | null {
@@ -248,6 +278,57 @@ function extractOutgoingLinks(body: string): VaultNoteLink[] {
   return matches.map((match) => match.link)
 }
 
+function extractBodyMetadataValue(body: string, label: string): string | null {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = body.match(new RegExp(`\\*\\*${escapedLabel}:\\*\\*\\s*(.+)$`, 'mi'))
+  return normalizeText(match?.[1] ?? null)
+}
+
+function deriveMetadata(input: {
+  frontmatter: Record<string, unknown>
+  body: string
+  relPath: string
+}): {
+  title: string
+  slug: string
+  summary: string | null
+  tags: string[]
+  authors: string[]
+  source: string | null
+  references: string[]
+} {
+  const fallbackTitle = fallbackTitleFromPath(input.relPath)
+  const headingTitle = extractHeadingTitle(input.body)
+  const title =
+    normalizeText(input.frontmatter.title) ?? headingTitle ?? normalizePathTitleSegment(fallbackTitle) ?? fallbackTitle
+
+  const summary = normalizeText(input.frontmatter.summary) ?? extractBodyMetadataValue(input.body, 'TL;DR')
+  const tags = normalizeTags(input.frontmatter.tags).length
+    ? normalizeTags(input.frontmatter.tags)
+    : normalizeTags(extractBodyMetadataValue(input.body, 'Tags'))
+  const authors = normalizeStringList(input.frontmatter.authors ?? input.frontmatter.author).length
+    ? normalizeStringList(input.frontmatter.authors ?? input.frontmatter.author)
+    : normalizeStringList(extractBodyMetadataValue(input.body, 'Author'))
+  const source = normalizeText(input.frontmatter.source) ?? extractBodyMetadataValue(input.body, 'Source')
+  const references = normalizeStringList(input.frontmatter.references).length
+    ? normalizeStringList(input.frontmatter.references)
+    : normalizeStringList(
+        (extractBodyMetadataValue(input.body, 'References') ?? '')
+          .replace(/\[\[/g, '')
+          .replace(/\]\]/g, ''),
+      )
+
+  return {
+    title,
+    slug: normalizeSlug(input.frontmatter.slug, fallbackTitle),
+    summary,
+    tags,
+    authors,
+    source,
+    references,
+  }
+}
+
 export function parseNote(input: ParseNoteInput): ParsedVaultNote {
   const relPath = normalizeVaultPath(input.relPath)
   const warnings: string[] = []
@@ -264,17 +345,22 @@ export function parseNote(input: ParseNoteInput): ParsedVaultNote {
     warnings.push(`Failed to parse frontmatter for "${relPath}": ${reason}`)
   }
 
-  const fallbackTitle = fallbackTitleFromPath(relPath)
-  const title = normalizeText(frontmatter.title) ?? fallbackTitle
-  const slug = normalizeSlug(frontmatter.slug, fallbackTitle)
+  const metadata = deriveMetadata({
+    frontmatter,
+    body,
+    relPath,
+  })
 
   return {
     id: relPath,
     relPath,
-    title,
-    slug,
-    summary: normalizeText(frontmatter.summary),
-    tags: normalizeTags(frontmatter.tags),
+    title: metadata.title,
+    slug: metadata.slug,
+    summary: metadata.summary,
+    tags: metadata.tags,
+    authors: metadata.authors,
+    source: metadata.source,
+    references: metadata.references,
     createdAt: normalizeDate(frontmatter.createdAt),
     updatedAt: normalizeDate(frontmatter.updatedAt),
     frontmatter,

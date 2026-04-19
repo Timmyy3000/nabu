@@ -54,6 +54,9 @@ type VaultNotePayload = {
   title: string
   summary: string | null
   tags: string[]
+  authors: string[]
+  source: string | null
+  references: string[]
   createdAt: string | null
   updatedAt: string | null
   frontmatter: Record<string, unknown>
@@ -200,6 +203,9 @@ function toVaultNotePayload(note: ParsedVaultNote, backlinks: VaultBacklink[]): 
     title: note.title,
     summary: note.summary,
     tags: note.tags,
+    authors: note.authors,
+    source: note.source,
+    references: note.references,
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
     frontmatter: note.frontmatter,
