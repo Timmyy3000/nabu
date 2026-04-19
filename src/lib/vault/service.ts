@@ -328,6 +328,7 @@ function getNoteNeighborhood(index: LoadedVaultIndex, note: ParsedVaultNote): Va
     },
     outgoing,
     backlinks,
+    unresolvedOutgoing,
     relatedNotes,
     stats: {
       outgoingResolvedCount: outgoing.length,

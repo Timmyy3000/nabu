@@ -194,7 +194,7 @@ describe('vault retrieval contracts', () => {
         relPath: 'projects/roadmap.md',
         slug: 'roadmap',
       },
-      outgoing: [{ targetRelPath: 'projects/vision.md', targetSlug: 'vision' }],
+      outgoing: [{ targetRelPath: 'projects/vision.md', targetSlug: 'vision', targetTitle: 'Vision' }],
       backlinks: [
         {
           sourceRelPath: 'projects/plan.md',
@@ -202,6 +202,7 @@ describe('vault retrieval contracts', () => {
           raw: '[[projects/roadmap.md]]',
         },
       ],
+      unresolvedOutgoing: [],
       stats: {
         outgoingResolvedCount: 1,
         backlinkCount: 1,
