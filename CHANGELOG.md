@@ -2,6 +2,23 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.4.0] - 2026-04-19
+
+Design-system release.
+
+### Shipped
+
+- Shipped the design system and redesign into the real app instead of leaving it trapped in a standalone HTML mock
+- Rebuilt the vault UI around the new reading-first three-pane shell with quieter chrome and tighter hierarchy
+- Redesigned the login and `/agents.md` surfaces to match the same product language
+- Added exactly two supported themes: `scribe` and `graphite`, with persistent switching in the UI
+- Exposed note neighborhood data directly in the browse payload so the hosted reader can render metadata, backlinks, outgoing links, related notes, and stats in a details drawer
+- Restored functional parity across the redesigned UI: search, path/tag filtering, clickable tag chips, copy-path, internal note links, frontmatter metadata, and traversal affordances
+
+### Why it matters
+
+Nabu now actually looks like Nabu. The core vault surface, login flow, and agent docs share the same visual language and the same product posture: private, markdown-first, and built for humans and agents using the same knowledge space.
+
 ## [0.3.0] - 2026-04-13
 
 Workspace polish release.
