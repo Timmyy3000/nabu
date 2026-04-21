@@ -1,4 +1,4 @@
-import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rename, rmdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 function isMarkdownFile(fileName: string): boolean {
@@ -78,6 +78,27 @@ export class VaultFileNotFoundError extends Error {
   }
 }
 
+export class VaultFolderNotFoundError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VaultFolderNotFoundError'
+  }
+}
+
+export class VaultFolderNotEmptyError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VaultFolderNotEmptyError'
+  }
+}
+
+export class VaultPathConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VaultPathConflictError'
+  }
+}
+
 function toAbsoluteVaultPath(rootPath: string, relPath: string): string {
   return path.join(rootPath, relPath)
 }
@@ -138,4 +159,93 @@ export async function updateVaultMarkdownFile(rootPath: string, relPath: string,
   }
 
   await writeFile(absolutePath, rawMarkdown, { encoding: 'utf8' })
+}
+
+export async function moveVaultMarkdownFile(rootPath: string, fromRelPath: string, toRelPath: string): Promise<void> {
+  const fromAbsolutePath = toAbsoluteVaultPath(rootPath, fromRelPath)
+  const toAbsolutePath = toAbsoluteVaultPath(rootPath, toRelPath)
+
+  try {
+    const existing = await stat(fromAbsolutePath)
+    if (!existing.isFile()) {
+      throw new VaultFileNotFoundError(`File not found: ${fromRelPath}`)
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new VaultFileNotFoundError(`File not found: ${fromRelPath}`)
+    }
+
+    if (error instanceof VaultFileNotFoundError) {
+      throw error
+    }
+
+    throw error
+  }
+
+  try {
+    await stat(toAbsolutePath)
+    throw new VaultPathConflictError(`Path already exists: ${toRelPath}`)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if (error instanceof VaultPathConflictError) {
+        throw error
+      }
+
+      throw error
+    }
+  }
+
+  await mkdir(path.dirname(toAbsolutePath), { recursive: true })
+  await rename(fromAbsolutePath, toAbsolutePath)
+}
+
+export async function deleteVaultMarkdownFile(rootPath: string, relPath: string): Promise<void> {
+  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
+
+  try {
+    const existing = await stat(absolutePath)
+    if (!existing.isFile()) {
+      throw new VaultFileNotFoundError(`File not found: ${relPath}`)
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new VaultFileNotFoundError(`File not found: ${relPath}`)
+    }
+
+    if (error instanceof VaultFileNotFoundError) {
+      throw error
+    }
+
+    throw error
+  }
+
+  await rm(absolutePath)
+}
+
+export async function deleteVaultFolder(rootPath: string, relPath: string): Promise<void> {
+  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
+
+  try {
+    const existing = await stat(absolutePath)
+    if (!existing.isDirectory()) {
+      throw new VaultFolderNotFoundError(`Folder not found: ${relPath}`)
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new VaultFolderNotFoundError(`Folder not found: ${relPath}`)
+    }
+
+    if (error instanceof VaultFolderNotFoundError) {
+      throw error
+    }
+
+    throw error
+  }
+
+  const entries = await readdir(absolutePath)
+  if (entries.length > 0) {
+    throw new VaultFolderNotEmptyError(`Folder not empty: ${relPath}`)
+  }
+
+  await rmdir(absolutePath)
 }

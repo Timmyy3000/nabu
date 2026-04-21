@@ -160,3 +160,108 @@ describe('PUT /api/vault/notes/by-path', () => {
     })
   })
 })
+
+describe('PATCH /api/vault/notes/by-path', () => {
+  it('returns 401 when request is unauthenticated', async () => {
+    await createVaultFixture({
+      'docsyde/sales/icp-findings.md': '# ICP Findings',
+    })
+
+    const handler = Route.options.server.handlers.PATCH
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path', {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          path: 'docsyde/sales/icp-findings.md',
+          toPath: 'projects/docsyde/sales/icp-findings.md',
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(payload).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('moves note payload when request is authenticated', async () => {
+    await createVaultFixture({
+      'docsyde/sales/icp-findings.md': '# ICP Findings',
+    })
+
+    const handler = Route.options.server.handlers.PATCH
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path', {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+        body: JSON.stringify({
+          path: 'docsyde/sales/icp-findings.md',
+          toPath: 'projects/docsyde/sales/icp-findings.md',
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      moved: true,
+      fromPath: 'docsyde/sales/icp-findings.md',
+      toPath: 'projects/docsyde/sales/icp-findings.md',
+      note: {
+        relPath: 'projects/docsyde/sales/icp-findings.md',
+      },
+    })
+  })
+})
+
+describe('DELETE /api/vault/notes/by-path', () => {
+  it('returns 401 when request is unauthenticated', async () => {
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const handler = Route.options.server.handlers.DELETE
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path?path=projects/nabu/roadmap.md', {
+        method: 'DELETE',
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(payload).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('deletes note payload when request is authenticated', async () => {
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const handler = Route.options.server.handlers.DELETE
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path?path=projects/nabu/roadmap.md', {
+        method: 'DELETE',
+        headers: {
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toEqual({
+      builtAt: expect.any(String),
+      deleted: true,
+      note: {
+        relPath: 'projects/nabu/roadmap.md',
+      },
+    })
+  })
+})

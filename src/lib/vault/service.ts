@@ -5,10 +5,16 @@ import { getVaultConfig } from './config'
 import {
   createVaultFolder as createVaultFolderOnDisk,
   createVaultMarkdownFile,
+  deleteVaultFolder as deleteVaultFolderOnDisk,
+  deleteVaultMarkdownFile,
+  moveVaultMarkdownFile,
   scanVaultFilesystem,
   updateVaultMarkdownFile,
   VaultFileAlreadyExistsError,
   VaultFileNotFoundError,
+  VaultFolderNotEmptyError,
+  VaultFolderNotFoundError,
+  VaultPathConflictError,
 } from './filesystem'
 import { buildVaultIndex } from './index'
 import { parseNote, type ParsedVaultNote, type VaultNoteLink } from './parse-note'
@@ -97,9 +103,20 @@ type VaultFolderCreateResult = {
   builtAt: string
 }
 
+type VaultFolderDeleteResult = {
+  path: string
+  deleted: true
+  builtAt: string
+}
+
 type VaultNoteWriteInput = {
   path: string | null | undefined
   rawMarkdown: string | null | undefined
+}
+
+type VaultNoteMoveInput = {
+  path: string | null | undefined
+  toPath: string | null | undefined
 }
 
 type VaultNoteCreateResult = {
@@ -111,6 +128,22 @@ type VaultNoteCreateResult = {
 type VaultNoteUpdateResult = {
   builtAt: string
   updated: true
+  note: VaultNotePayload
+}
+
+type VaultNoteDeleteResult = {
+  builtAt: string
+  deleted: true
+  note: {
+    relPath: string
+  }
+}
+
+type VaultNoteMoveResult = {
+  builtAt: string
+  moved: true
+  fromPath: string
+  toPath: string
   note: VaultNotePayload
 }
 
@@ -708,6 +741,88 @@ export async function updateVaultNote(input: VaultNoteWriteInput): Promise<Vault
   }
 }
 
+export async function moveVaultNote(input: VaultNoteMoveInput): Promise<VaultNoteMoveResult> {
+  const fromPath = normalizeMarkdownNotePathInput(input.path)
+  const toPath = normalizeMarkdownNotePathInput(input.toPath)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await moveVaultMarkdownFile(rootPath, fromPath, toPath)
+  } catch (error) {
+    if (error instanceof VaultFileNotFoundError) {
+      throw new Error(`Note not found: ${fromPath}`)
+    }
+
+    if (error instanceof VaultPathConflictError) {
+      throw new Error(`Destination already exists: ${toPath}`)
+    }
+
+    throw error
+  }
+
+  const { index, note } = await readNoteFromRebuiltIndex(toPath)
+
+  return {
+    builtAt: index.builtAt,
+    moved: true,
+    fromPath,
+    toPath,
+    note,
+  }
+}
+
+export async function deleteVaultNote(pathInput: string | null | undefined): Promise<VaultNoteDeleteResult> {
+  const normalizedPath = normalizeMarkdownNotePathInput(pathInput)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await deleteVaultMarkdownFile(rootPath, normalizedPath)
+  } catch (error) {
+    if (error instanceof VaultFileNotFoundError) {
+      throw new Error(`Note not found: ${normalizedPath}`)
+    }
+
+    throw error
+  }
+
+  const index = await rebuildVaultIndex()
+
+  return {
+    builtAt: index.builtAt,
+    deleted: true,
+    note: {
+      relPath: normalizedPath,
+    },
+  }
+}
+
+export async function deleteVaultFolder(folderPathInput: string | null | undefined): Promise<VaultFolderDeleteResult> {
+  const normalizedPath = normalizeFolderPathInput(folderPathInput)
+  const { rootPath } = await getVaultConfig()
+
+  try {
+    await deleteVaultFolderOnDisk(rootPath, normalizedPath)
+  } catch (error) {
+    if (error instanceof VaultFolderNotFoundError) {
+      throw new Error(`Folder not found: ${normalizedPath}`)
+    }
+
+    if (error instanceof VaultFolderNotEmptyError) {
+      throw new Error(`Folder not empty: ${normalizedPath}`)
+    }
+
+    throw error
+  }
+
+  const index = await rebuildVaultIndex()
+
+  return {
+    builtAt: index.builtAt,
+    deleted: true,
+    path: normalizedPath,
+  }
+}
+
 function normalizeSearchPath(pathInput: string | null | undefined): string {
   if (pathInput == null) {
     return ''
@@ -1013,6 +1128,112 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput):
     return Response.json(
       {
         error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+}
+
+export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Promise<Response> {
+  try {
+    const moved = await moveVaultNote(input)
+    return Response.json(moved)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note not found: ')) {
+      const notePath = error.message.replace('Note not found: ', '')
+      return Response.json(
+        {
+          error: 'Note not found',
+          path: notePath,
+        },
+        { status: 404 },
+      )
+    }
+
+    if (error instanceof Error && error.message.startsWith('Destination already exists: ')) {
+      const notePath = error.message.replace('Destination already exists: ', '')
+      return Response.json(
+        {
+          error: 'Destination already exists',
+          path: notePath,
+        },
+        { status: 409 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+}
+
+export async function deleteVaultNoteByPathResponse(input: { path: string | null | undefined }): Promise<Response> {
+  try {
+    const deleted = await deleteVaultNote(input.path)
+    return Response.json(deleted)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Note not found: ')) {
+      const notePath = error.message.replace('Note not found: ', '')
+      return Response.json(
+        {
+          error: 'Note not found',
+          path: notePath,
+        },
+        { status: 404 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid note path',
+        path: input.path ?? '',
+      },
+      { status: 400 },
+    )
+  }
+}
+
+export async function deleteVaultFolderResponse(input: { path: string | null | undefined }): Promise<Response> {
+  try {
+    const deleted = await deleteVaultFolder(input.path)
+    return Response.json({
+      builtAt: deleted.builtAt,
+      deleted: true,
+      folder: {
+        path: deleted.path,
+      },
+    })
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Folder not found: ')) {
+      const folderPath = error.message.replace('Folder not found: ', '')
+      return Response.json(
+        {
+          error: 'Folder not found',
+          path: folderPath,
+        },
+        { status: 404 },
+      )
+    }
+
+    if (error instanceof Error && error.message.startsWith('Folder not empty: ')) {
+      const folderPath = error.message.replace('Folder not empty: ', '')
+      return Response.json(
+        {
+          error: 'Folder not empty',
+          path: folderPath,
+        },
+        { status: 409 },
+      )
+    }
+
+    return Response.json(
+      {
+        error: 'Invalid folder path',
         path: input.path ?? '',
       },
       { status: 400 },
