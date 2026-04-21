@@ -1,38 +1,32 @@
-// @vitest-environment jsdom
-
-import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { getAgentBootstrapContract } from '../lib/agent/bootstrap'
-import { AgentsPage } from './agents'
+import { renderAgentsMarkdown } from './agents'
 
-describe('AgentsPage', () => {
-  it('renders agent onboarding content and real retrieval surfaces for authenticated users', () => {
-    render(<AgentsPage authenticated={true} />)
+describe('renderAgentsMarkdown', () => {
+  it('renders a compact bootstrap contract for unauthenticated agents', () => {
+    const markdown = renderAgentsMarkdown(false, 'https://nabu.timi.click')
 
-    expect(screen.getByRole('heading', { name: '/agents.md' })).toBeInTheDocument()
-    expect(screen.getByText(/starting point for agents/i)).toBeInTheDocument()
-
-    expect(screen.getByText('GET /api/vault/')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/index/stats')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/tree')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/folders?path=')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/notes/$slug')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/notes/by-path?path=')).toBeInTheDocument()
-    expect(screen.getByText('GET /api/vault/search?q=&path=&tag=&limit=&offset=')).toBeInTheDocument()
+    expect(markdown).toContain('# /agents.md')
+    expect(markdown).toContain('POST /api/auth/login')
+    expect(markdown).toContain('Read this route before touching the browser UI.')
+    expect(markdown).toContain('Do not use browser automation or browser-use for normal note operations.')
+    expect(markdown).toContain('https://nabu.timi.click/api/auth/login')
+    expect(markdown).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
+    expect(markdown).not.toContain('PATCH /api/vault/notes/by-path')
+    expect(markdown).not.toContain('<html')
   })
 
-  it('renders the same bootstrap identity guidance exposed by the public contract when unauthenticated', () => {
-    const bootstrap = getAgentBootstrapContract()
+  it('renders the full authenticated contract in raw markdown', () => {
+    const markdown = renderAgentsMarkdown(true, 'https://nabu.timi.click')
 
-    render(<AgentsPage authenticated={false} />)
-
-    expect(screen.getByRole('heading', { name: '/agents.md' })).toBeInTheDocument()
-    expect(screen.getByText('POST /api/auth/login')).toBeInTheDocument()
-    expect(screen.getByText(/application\/x-www-form-urlencoded/i)).toBeInTheDocument()
-    expect(screen.getByText(/nabu_session/i)).toBeInTheDocument()
-    expect(screen.getByText(bootstrap.identity.note)).toBeInTheDocument()
-    expect(screen.getByText(bootstrap.identity.deterministicRead)).toBeInTheDocument()
-    expect(screen.getByText(bootstrap.identity.convenienceRead)).toBeInTheDocument()
-    expect(screen.queryByText('GET /api/vault/tree')).not.toBeInTheDocument()
+    expect(markdown).toContain('PATCH /api/vault/notes/by-path')
+    expect(markdown).toContain('DELETE /api/vault/notes/by-path?path=')
+    expect(markdown).toContain('DELETE /api/vault/folders?path=')
+    expect(markdown).toContain('Read this route before touching the browser UI.')
+    expect(markdown).toContain('Use deterministic by-path reads after every mutation.')
+    expect(markdown).toContain('https://nabu.timi.click/api/vault/notes/by-path?path=projects/docsyde/sales/icp-findings.md')
+    expect(markdown).toContain('When writing notes, prefer canonical frontmatter metadata')
+    expect(markdown).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
+    expect(markdown).toContain('Folder delete is empty-only and non-recursive.')
+    expect(markdown).not.toContain('<html')
   })
 })

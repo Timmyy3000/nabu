@@ -119,6 +119,7 @@ describe('buildVaultIndex', () => {
         resolved: true,
         targetRelPath: 'projects/roadmap.md',
         targetSlug: 'roadmap',
+        targetTitle: 'Roadmap',
       },
       {
         raw: '[[projects/vision]]',
@@ -128,6 +129,7 @@ describe('buildVaultIndex', () => {
         resolved: true,
         targetRelPath: 'projects/vision.md',
         targetSlug: 'vision',
+        targetTitle: 'Product Vision',
       },
       {
         raw: '[[roadmap]]',
@@ -137,6 +139,7 @@ describe('buildVaultIndex', () => {
         resolved: true,
         targetRelPath: 'projects/roadmap.md',
         targetSlug: 'roadmap',
+        targetTitle: 'Roadmap',
       },
       {
         raw: '[[Product Vision]]',
@@ -146,6 +149,7 @@ describe('buildVaultIndex', () => {
         resolved: true,
         targetRelPath: 'projects/vision.md',
         targetSlug: 'vision',
+        targetTitle: 'Product Vision',
       },
       {
         raw: '[[Unknown Note]]',
@@ -164,6 +168,7 @@ describe('buildVaultIndex', () => {
         resolved: true,
         targetRelPath: 'projects/roadmap.md',
         targetSlug: 'roadmap',
+        targetTitle: 'Roadmap',
       },
       {
         raw: '[Missing](../projects/missing.md)',
