@@ -83,7 +83,7 @@ function buildBrowseFixture() {
         status: 'draft',
         confidence: 'high',
       },
-      body: '# Alpha\n\nSee [[beta]] and [Roadmap](../projects/roadmap.md).',
+      body: '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
       outgoingLinks: [
         {
           raw: '[[beta]]',
@@ -93,15 +93,17 @@ function buildBrowseFixture() {
           resolved: true,
           targetRelPath: 'ideas/beta.md',
           targetSlug: 'beta',
+          targetTitle: 'Beta',
         },
         {
-          raw: '[Roadmap](../projects/roadmap.md)',
+          raw: '[Roadmap Doc](../projects/roadmap.md)',
           kind: 'markdown',
-          text: 'Roadmap',
+          text: 'Roadmap Doc',
           target: '../projects/roadmap.md',
           resolved: true,
           targetRelPath: 'projects/roadmap.md',
           targetSlug: 'roadmap',
+          targetTitle: 'Roadmap',
         },
       ],
       backlinks: [
@@ -129,6 +131,7 @@ function buildBrowseFixture() {
           target: 'beta',
           targetRelPath: 'ideas/beta.md',
           targetSlug: 'beta',
+          targetTitle: 'Beta',
         },
         {
           raw: '[Roadmap](../projects/roadmap.md)',
@@ -137,6 +140,7 @@ function buildBrowseFixture() {
           target: '../projects/roadmap.md',
           targetRelPath: 'projects/roadmap.md',
           targetSlug: 'roadmap',
+          targetTitle: 'Roadmap',
         },
       ],
       backlinks: [
@@ -147,6 +151,17 @@ function buildBrowseFixture() {
           kind: 'markdown',
           text: 'Alpha',
           raw: '[Alpha](../ideas/alpha.md)',
+        },
+      ],
+      unresolvedOutgoing: [
+        {
+          raw: '[[missing-note]]',
+          kind: 'wiki',
+          text: null,
+          target: 'missing-note',
+          resolved: false,
+          targetRelPath: null,
+          targetSlug: null,
         },
       ],
       relatedNotes: [
@@ -161,7 +176,7 @@ function buildBrowseFixture() {
       stats: {
         outgoingResolvedCount: 2,
         backlinkCount: 1,
-        unresolvedOutgoingCount: 0,
+        unresolvedOutgoingCount: 1,
       },
     },
   }
@@ -201,7 +216,7 @@ describe('HomePage', () => {
     render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
     expect(screen.getByRole('link', { name: 'beta' }).getAttribute('href')).toContain('folder=ideas')
-    expect(screen.getByRole('link', { name: 'Roadmap' }).getAttribute('href')).toContain('folder=projects')
+    expect(screen.getByRole('link', { name: 'Roadmap Doc' }).getAttribute('href')).toContain('folder=projects')
   })
 
   it('reveals note details, metadata, backlinks, outgoing links, and related notes in the details drawer', () => {
@@ -213,7 +228,10 @@ describe('HomePage', () => {
     expect(screen.getByText('Claude')).toBeInTheDocument()
     expect(screen.getByText('https://usedocsyde.com')).toBeInTheDocument()
     expect(screen.getByText(/linked from/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/outgoing/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/resolved outgoing/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Roadmap Doc' })).toBeInTheDocument()
+    expect(screen.getAllByText(/unresolved links/i).length).toBeGreaterThan(0)
+    expect(screen.getByText('[[missing-note]]')).toBeInTheDocument()
     expect(screen.getByText(/related/i)).toBeInTheDocument()
     expect(screen.getByText('draft')).toBeInTheDocument()
   })

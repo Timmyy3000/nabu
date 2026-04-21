@@ -39,6 +39,7 @@ export type VaultResolvedOutgoingLink = {
   target: string
   targetRelPath: string
   targetSlug: string
+  targetTitle: string
 }
 
 export type VaultRelatedReason = 'outgoing' | 'backlink' | 'shared-folder'
@@ -59,6 +60,7 @@ export type VaultNoteNeighborhood = {
   }
   outgoing: VaultResolvedOutgoingLink[]
   backlinks: VaultBacklink[]
+  unresolvedOutgoing: VaultNoteLink[]
   relatedNotes: VaultRelatedNote[]
   stats: {
     outgoingResolvedCount: number

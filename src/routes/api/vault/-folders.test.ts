@@ -23,8 +23,10 @@ async function createVaultFixture(files: Record<string, string>) {
   )
 
   process.env.KNOWLEDGE_PATH = root
-  process.env.NABU_PASSWORD = 'test-password'
+  process.env.NABU_PASSWORD='***'
   __resetVaultServiceForTests()
+
+  return root
 }
 
 afterEach(async () => {
@@ -81,6 +83,54 @@ describe('POST /api/vault/folders', () => {
       folder: {
         path: 'projects/nabu/specs',
         created: true,
+      },
+    })
+  })
+})
+
+describe('DELETE /api/vault/folders', () => {
+  it('returns 401 when request is unauthenticated', async () => {
+    const root = await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+    })
+    await mkdir(path.join(root, 'docsyde/sales'), { recursive: true })
+
+    const handler = Route.options.server.handlers.DELETE
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/folders?path=docsyde/sales', {
+        method: 'DELETE',
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(payload).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('deletes empty folder payload when request is authenticated', async () => {
+    const root = await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+    })
+    await mkdir(path.join(root, 'docsyde/sales'), { recursive: true })
+
+    const handler = Route.options.server.handlers.DELETE
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/folders?path=docsyde/sales', {
+        method: 'DELETE',
+        headers: {
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toEqual({
+      builtAt: expect.any(String),
+      deleted: true,
+      folder: {
+        path: 'docsyde/sales',
       },
     })
   })

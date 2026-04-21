@@ -49,6 +49,10 @@ export function LoginPage({ redirect, error }: { redirect: string; error: string
         <p className="section-label">private vault</p>
         <h1>sign in</h1>
         <p className="auth-copy">Enter the shared password to open the vault.</p>
+        <p className="auth-copy auth-copy-agent">
+          Agents should start at <code>/agents.md</code> and use the API contract, not the browser UI.{' '}
+          <a href="/agents.md">Open agent contract</a>.
+        </p>
         {error === '1' ? <p className="auth-error">Wrong password.</p> : null}
         <form method="post" action="/api/auth/login" className="auth-form">
           <input type="hidden" name="redirect" value={safeRedirect} />

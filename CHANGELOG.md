@@ -2,6 +2,37 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.4.2] - 2026-04-19
+
+Launch cleanup release.
+
+### Shipped
+
+- Removed the obsolete `design/nabu_redesign.html` standalone mock now that the redesign has already been shipped into the real product
+
+### Why it matters
+
+The redesign should live in Nabu itself, not in a stale HTML artifact sitting beside the product. This release trims that leftover file and keeps the repo aligned with the real shipped surface.
+
+## [0.4.1] - 2026-04-19
+
+Launch readiness release.
+
+### Shipped
+
+- Added a proper agent-first `SETUP.md` that explains the correct way to self-host Nabu for a human
+- Documented the non-negotiables for persistent storage, mounted vaults, passwords, backups, and post-install verification
+- Added a real `Dockerfile` and `.dockerignore` so container deployment is runnable instead of hand-wavy
+- Tightened the note details drawer so it distinguishes resolved outgoing links from unresolved ones
+- Exposed unresolved outgoing links in the note neighborhood payload and surfaced them in the UI
+- Preserved authored link labels for resolved outgoing links while still resolving targets correctly
+- Fixed long metadata/link text leaking out of the details drawer container
+- Linked the main README to the new setup guide and updated release docs to match the actual deployment paths
+
+### Why it matters
+
+This is the "tell your agent to set it up" release. Nabu is now in a much better state for public sharing: the deployment story is concrete, the persistence guidance is explicit, and the hosted UI explains note relationships without confusing resolved links and broken ones.
+
 ## [0.4.0] - 2026-04-19
 
 Design-system release.

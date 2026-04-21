@@ -1,5 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { createVaultFolderResponse, getVaultFolderListingResponse } from '../../../lib/vault/service'
+import {
+  createVaultFolderResponse,
+  deleteVaultFolderResponse,
+  getVaultFolderListingResponse,
+} from '../../../lib/vault/service'
 
 export const Route = createFileRoute('/api/vault/folders')({
   server: {
@@ -36,6 +40,16 @@ export const Route = createFileRoute('/api/vault/folders')({
 
         const payload = body as { path?: string | null }
         return createVaultFolderResponse({ path: payload.path ?? null })
+      },
+      DELETE: async ({ request }) => {
+        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
+        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
+        if (unauthorizedResponse) {
+          return unauthorizedResponse
+        }
+
+        const url = new URL(request.url)
+        return deleteVaultFolderResponse({ path: url.searchParams.get('path') })
       },
     },
   },

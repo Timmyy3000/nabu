@@ -1,31 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { createServerFn } from '@tanstack/react-start'
-import { AgentsPage } from '../pages/agents'
-
-const getAuthStatus = createServerFn({ method: 'GET' }).handler(async ({ request }) => {
-  const { isAuthenticatedRequest } = await import('../lib/auth/session')
-  return {
-    authenticated: isAuthenticatedRequest(request),
-  }
-})
+import { renderAgentsMarkdown } from '../pages/agents'
 
 export const Route = createFileRoute('/agents.md')({
-  loader: async () => getAuthStatus(),
-  head: () => ({
-    meta: [
-      {
-        title: 'Nabu /agents.md',
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const { isAuthenticatedRequest } = await import('../lib/auth/session')
+        const body = renderAgentsMarkdown(isAuthenticatedRequest(request), new URL(request.url).origin)
+        return new Response(body, {
+          status: 200,
+          headers: {
+            'content-type': 'text/markdown; charset=utf-8',
+          },
+        })
       },
-      {
-        name: 'description',
-        content: 'Agent entrypoint for this Nabu instance: auth model, retrieval surfaces, and usage conventions.',
-      },
-    ],
-  }),
-  component: AgentsRoute,
+    },
+  },
 })
-
-function AgentsRoute() {
-  const auth = Route.useLoaderData()
-  return <AgentsPage authenticated={auth.authenticated} />
-}

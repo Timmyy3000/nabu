@@ -147,7 +147,13 @@ function buildMetadataRows(browse: VaultBrowseData) {
     rows.push({ key: 'updatedAt', label: 'updated', value: formatDate(note.updatedAt) ?? note.updatedAt })
   }
 
+  const hiddenKeys = new Set(['title', 'slug', 'authors', 'author', 'source', 'createdAt', 'updatedAt', 'summary', 'references', 'tags'])
+
   for (const [frontmatterKey, frontmatterValue] of Object.entries(note.frontmatter)) {
+    if (hiddenKeys.has(frontmatterKey)) {
+      continue
+    }
+
     rows.push({
       key: `frontmatter-${frontmatterKey}`,
       label: frontmatterKey,
@@ -161,6 +167,10 @@ function buildMetadataRows(browse: VaultBrowseData) {
 function breadcrumbSegments(relPath: string) {
   const parts = relPath.split('/').filter(Boolean)
   return ['vault', ...parts]
+}
+
+function getOutgoingLinkLabel(link: VaultNoteNeighborhood['outgoing'][number]): string {
+  return link.text || link.targetTitle || link.targetSlug
 }
 
 function BacklinkList({ links }: { links: VaultBacklink[] }) {
@@ -216,7 +226,7 @@ function DetailsDrawer({
         <div className="stat-grid">
           <div className="stat-tile">
             <strong>{neighborhood?.stats.outgoingResolvedCount ?? browse.note.outgoingLinks.length}</strong>
-            <span>outgoing</span>
+            <span>resolved outgoing</span>
           </div>
           <div className="stat-tile">
             <strong>{neighborhood?.stats.backlinkCount ?? browse.note.backlinks.length}</strong>
@@ -224,7 +234,7 @@ function DetailsDrawer({
           </div>
           <div className="stat-tile">
             <strong>{neighborhood?.stats.unresolvedOutgoingCount ?? 0}</strong>
-            <span>unresolved</span>
+            <span>unresolved links</span>
           </div>
         </div>
       </section>
@@ -240,7 +250,7 @@ function DetailsDrawer({
           {(neighborhood?.outgoing ?? []).map((link) => (
             <li key={`${link.targetRelPath}:${link.raw}`}>
               <Link to="/" search={() => ({ folder: getParentFolderPath(link.targetRelPath), note: link.targetSlug, q: '', searchPath: '', searchTag: '' })}>
-                {link.text ?? link.targetSlug}
+                {getOutgoingLinkLabel(link)}
               </Link>
               <p className="meta-inline">{link.targetRelPath}</p>
             </li>
@@ -248,6 +258,20 @@ function DetailsDrawer({
           {!neighborhood?.outgoing.length ? <li className="empty-copy">none</li> : null}
         </ul>
       </section>
+
+      {neighborhood?.unresolvedOutgoing.length ? (
+        <section className="drawer-section">
+          <p className="section-label">unresolved links</p>
+          <p className="drawer-note">Links found in the note body that do not currently resolve to another note in the vault.</p>
+          <ul className="drawer-list">
+            {neighborhood.unresolvedOutgoing.map((link) => (
+              <li key={`${link.kind}:${link.raw}`}>
+                <code>{link.raw}</code>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="drawer-section">
         <p className="section-label">related</p>

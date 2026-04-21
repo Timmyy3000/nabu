@@ -6,6 +6,8 @@ import {
   __resetVaultServiceForTests,
   createVaultFolderResponse,
   createVaultNoteResponse,
+  deleteVaultFolderResponse,
+  deleteVaultNoteByPathResponse,
   getVaultFolderListingResponse,
   getVaultIndexResponse,
   getVaultIndexStatsResponse,
@@ -14,6 +16,7 @@ import {
   getVaultNoteBySlugResponse,
   getVaultSearchResponse,
   getVaultTreeResponse,
+  moveVaultNoteByPathResponse,
   updateVaultNoteByPathResponse,
 } from './service'
 
@@ -194,7 +197,7 @@ describe('vault retrieval contracts', () => {
         relPath: 'projects/roadmap.md',
         slug: 'roadmap',
       },
-      outgoing: [{ targetRelPath: 'projects/vision.md', targetSlug: 'vision' }],
+      outgoing: [{ targetRelPath: 'projects/vision.md', targetSlug: 'vision', targetTitle: 'Vision' }],
       backlinks: [
         {
           sourceRelPath: 'projects/plan.md',
@@ -202,6 +205,7 @@ describe('vault retrieval contracts', () => {
           raw: '[[projects/roadmap.md]]',
         },
       ],
+      unresolvedOutgoing: [],
       stats: {
         outgoingResolvedCount: 1,
         backlinkCount: 1,
@@ -611,6 +615,183 @@ describe('vault retrieval contracts', () => {
     expect(invalidPayload).toEqual({
       error: 'Invalid note path',
       path: '../secrets.md',
+    })
+  })
+
+  it('moves notes with 200, 404, 409, and 400 semantics', async () => {
+    await createVaultFixture({
+      'docsyde/sales/icp-findings.md': '# ICP Findings\n\nDraft.',
+      'projects/docsyde/sales/existing.md': '# Existing',
+    })
+
+    const moved = await moveVaultNoteByPathResponse({
+      path: 'docsyde/sales/icp-findings.md',
+      toPath: 'projects/docsyde/sales/icp-findings.md',
+    })
+    const movedPayload = await moved.json()
+    const oldPath = await getVaultNoteByPathResponse('docsyde/sales/icp-findings.md')
+    const oldPathPayload = await oldPath.json()
+    const newPath = await getVaultNoteByPathResponse('projects/docsyde/sales/icp-findings.md')
+    const newPathPayload = await newPath.json()
+    const oldFolder = await getVaultFolderListingResponse('docsyde/sales')
+    const oldFolderPayload = await oldFolder.json()
+    const conflict = await moveVaultNoteByPathResponse({
+      path: 'projects/docsyde/sales/icp-findings.md',
+      toPath: 'projects/docsyde/sales/existing.md',
+    })
+    const conflictPayload = await conflict.json()
+    const missing = await moveVaultNoteByPathResponse({
+      path: 'projects/docsyde/sales/missing.md',
+      toPath: 'projects/docsyde/sales/renamed.md',
+    })
+    const missingPayload = await missing.json()
+    const invalid = await moveVaultNoteByPathResponse({
+      path: '../secrets.md',
+      toPath: 'projects/docsyde/sales/renamed.md',
+    })
+    const invalidPayload = await invalid.json()
+
+    expect(moved.status).toBe(200)
+    expect(movedPayload).toMatchObject({
+      builtAt: expect.any(String),
+      moved: true,
+      fromPath: 'docsyde/sales/icp-findings.md',
+      toPath: 'projects/docsyde/sales/icp-findings.md',
+      note: {
+        relPath: 'projects/docsyde/sales/icp-findings.md',
+        body: '# ICP Findings\n\nDraft.',
+      },
+    })
+
+    expect(oldPath.status).toBe(404)
+    expect(oldPathPayload).toEqual({
+      error: 'Note not found',
+      path: 'docsyde/sales/icp-findings.md',
+    })
+
+    expect(newPath.status).toBe(200)
+    expect(newPathPayload).toMatchObject({
+      note: {
+        relPath: 'projects/docsyde/sales/icp-findings.md',
+      },
+    })
+
+    expect(oldFolder.status).toBe(200)
+    expect(oldFolderPayload).toMatchObject({
+      folder: {
+        path: 'docsyde/sales',
+      },
+    })
+
+    expect(conflict.status).toBe(409)
+    expect(conflictPayload).toEqual({
+      error: 'Destination already exists',
+      path: 'projects/docsyde/sales/existing.md',
+    })
+
+    expect(missing.status).toBe(404)
+    expect(missingPayload).toEqual({
+      error: 'Note not found',
+      path: 'projects/docsyde/sales/missing.md',
+    })
+
+    expect(invalid.status).toBe(400)
+    expect(invalidPayload).toEqual({
+      error: 'Invalid note path',
+      path: '../secrets.md',
+    })
+  })
+
+  it('deletes notes with 200, 404, and 400 semantics', async () => {
+    await createVaultFixture({
+      'projects/docsyde/sales/icp-findings.md': '# ICP Findings\n\nDone.',
+    })
+
+    const deleted = await deleteVaultNoteByPathResponse({ path: 'projects/docsyde/sales/icp-findings.md' })
+    const deletedPayload = await deleted.json()
+    const missingAfterDelete = await getVaultNoteByPathResponse('projects/docsyde/sales/icp-findings.md')
+    const missingAfterDeletePayload = await missingAfterDelete.json()
+    const missing = await deleteVaultNoteByPathResponse({ path: 'projects/docsyde/sales/icp-findings.md' })
+    const missingPayload = await missing.json()
+    const invalid = await deleteVaultNoteByPathResponse({ path: '../secrets.md' })
+    const invalidPayload = await invalid.json()
+
+    expect(deleted.status).toBe(200)
+    expect(deletedPayload).toEqual({
+      builtAt: expect.any(String),
+      deleted: true,
+      note: {
+        relPath: 'projects/docsyde/sales/icp-findings.md',
+      },
+    })
+
+    expect(missingAfterDelete.status).toBe(404)
+    expect(missingAfterDeletePayload).toEqual({
+      error: 'Note not found',
+      path: 'projects/docsyde/sales/icp-findings.md',
+    })
+
+    expect(missing.status).toBe(404)
+    expect(missingPayload).toEqual({
+      error: 'Note not found',
+      path: 'projects/docsyde/sales/icp-findings.md',
+    })
+
+    expect(invalid.status).toBe(400)
+    expect(invalidPayload).toEqual({
+      error: 'Invalid note path',
+      path: '../secrets.md',
+    })
+  })
+
+  it('deletes folders only when empty with 200, 404, 409, and 400 semantics', async () => {
+    const root = await createVaultFixture({
+      'projects/docsyde/sales/icp-findings.md': '# ICP Findings',
+    })
+    await mkdir(path.join(root, 'docsyde/sales'), { recursive: true })
+
+    const deleted = await deleteVaultFolderResponse({ path: 'docsyde/sales' })
+    const deletedPayload = await deleted.json()
+    const missingAfterDelete = await getVaultFolderListingResponse('docsyde/sales')
+    const missingAfterDeletePayload = await missingAfterDelete.json()
+    const nonEmpty = await deleteVaultFolderResponse({ path: 'projects/docsyde/sales' })
+    const nonEmptyPayload = await nonEmpty.json()
+    const missing = await deleteVaultFolderResponse({ path: 'docsyde/sales' })
+    const missingPayload = await missing.json()
+    const invalid = await deleteVaultFolderResponse({ path: '../secrets' })
+    const invalidPayload = await invalid.json()
+
+    expect(deleted.status).toBe(200)
+    expect(deletedPayload).toEqual({
+      builtAt: expect.any(String),
+      deleted: true,
+      folder: {
+        path: 'docsyde/sales',
+      },
+    })
+
+    expect(missingAfterDelete.status).toBe(404)
+    expect(missingAfterDeletePayload).toEqual({
+      error: 'Folder not found',
+      folder: 'docsyde/sales',
+    })
+
+    expect(nonEmpty.status).toBe(409)
+    expect(nonEmptyPayload).toEqual({
+      error: 'Folder not empty',
+      path: 'projects/docsyde/sales',
+    })
+
+    expect(missing.status).toBe(404)
+    expect(missingPayload).toEqual({
+      error: 'Folder not found',
+      path: 'docsyde/sales',
+    })
+
+    expect(invalid.status).toBe(400)
+    expect(invalidPayload).toEqual({
+      error: 'Invalid folder path',
+      path: '../secrets',
     })
   })
 })

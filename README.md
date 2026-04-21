@@ -25,6 +25,7 @@ Current direction:
 - Filesystem-first mounted vaults via `KNOWLEDGE_PATH`
 - Safe server-side indexing, retrieval, and authenticated writes
 - Dokploy-friendly deployment
+- Source-build and Dockerfile deployment paths
 - Password-protected private knowledge spaces
 
 ## Shipped so far
@@ -61,6 +62,12 @@ nabu/
 ```
 
 TanStack Start currently serves both the frontend routes and the server-backed API surfaces from the same integrated app.
+
+## Setup
+
+If you want an agent to install Nabu for a human with minimal back-and-forth, start here:
+
+- [SETUP.md](./SETUP.md) — agent-first deployment and persistence guide
 
 ## Local development
 
@@ -126,7 +133,7 @@ Repo-safe demo content can live in `examples/`.
 - [x] Add auth for private deployments
 - [x] Add `/agents.md` agent-facing entrypoint
 - [x] Add tags, backlinks, lexical search, and neighborhood traversal
-- [ ] Ship Dokploy deployment config
+- [x] Ship Dokploy deployment config
 
 ## License
 

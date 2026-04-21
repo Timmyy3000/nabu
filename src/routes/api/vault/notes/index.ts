@@ -24,10 +24,23 @@ export const Route = createFileRoute('/api/vault/notes/')({
           )
         }
 
-        const payload = body as { path?: string | null; rawMarkdown?: string | null }
+        const payload = body as {
+          path?: string | null
+          rawMarkdown?: string | null
+          document?: {
+            title?: string | null
+            summary?: string | null
+            tags?: unknown
+            authors?: unknown
+            source?: string | null
+            references?: unknown
+            body?: string | null
+          } | null
+        }
         return createVaultNoteResponse({
           path: payload.path ?? null,
           rawMarkdown: payload.rawMarkdown ?? null,
+          document: payload.document ?? null,
         })
       },
     },
