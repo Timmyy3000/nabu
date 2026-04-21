@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -28,6 +28,7 @@ async function createVaultFixture(files: Record<string, string>) {
 }
 
 afterEach(async () => {
+  vi.useRealTimers()
   process.env.KNOWLEDGE_PATH = ORIGINAL_KNOWLEDGE_PATH
   process.env.NABU_PASSWORD = ORIGINAL_NABU_PASSWORD
   __resetVaultServiceForTests()
@@ -157,6 +158,87 @@ describe('PUT /api/vault/notes/by-path', () => {
         relPath: 'projects/nabu/roadmap.md',
         body: '# Roadmap\n\nUpdated.',
       },
+    })
+  })
+
+  it('updates note payload from structured document input when request is authenticated', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-22T09:00:00.000Z'))
+
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '---\ntitle: Roadmap\ncreatedAt: 2026-04-20T08:00:00.000Z\nupdatedAt: 2026-04-20T08:00:00.000Z\ntags: [old]\n---\nLegacy body',
+    })
+
+    const handler = Route.options.server.handlers.PUT
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+        body: JSON.stringify({
+          path: 'projects/nabu/roadmap.md',
+          document: {
+            title: 'Roadmap',
+            summary: 'Current release plan.',
+            tags: ['Nabu', 'Roadmap'],
+            authors: ['Shaka'],
+            body: '## Current\n\n- tighten agent flow',
+          },
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload).toMatchObject({
+      updated: true,
+      note: {
+        relPath: 'projects/nabu/roadmap.md',
+        summary: 'Current release plan.',
+        tags: ['nabu', 'roadmap'],
+        authors: ['Shaka'],
+        createdAt: '2026-04-20T08:00:00.000Z',
+        updatedAt: '2026-04-22T09:00:00.000Z',
+      },
+    })
+    expect(payload.note.frontmatter).toMatchObject({
+      createdAt: '2026-04-20T08:00:00.000Z',
+      updatedAt: '2026-04-22T09:00:00.000Z',
+    })
+    expect(payload.note.body).toBe('## Current\n\n- tighten agent flow')
+  })
+
+  it('rejects update payloads with invalid structured document input', async () => {
+    await createVaultFixture({
+      'projects/nabu/roadmap.md': '# Roadmap',
+    })
+
+    const handler = Route.options.server.handlers.PUT
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes/by-path', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+        body: JSON.stringify({
+          path: 'projects/nabu/roadmap.md',
+          document: {
+            title: 'Roadmap',
+            body: '   ',
+          },
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(payload).toEqual({
+      error: 'Invalid request body',
     })
   })
 })

@@ -4,7 +4,11 @@ function lines(parts: Array<string | null | undefined | false>): string {
   return parts.filter(Boolean).join('\n')
 }
 
-export function renderAgentsMarkdown(authenticated: boolean): string {
+function withBaseUrl(baseUrl: string, routePath: string): string {
+  return `${baseUrl.replace(/\/$/, '')}${routePath}`
+}
+
+export function renderAgentsMarkdown(authenticated: boolean, baseUrl = 'http://localhost:3000'): string {
   const bootstrap = getAgentBootstrapContract()
 
   const header = lines([
@@ -13,6 +17,13 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
     'Agent contract for this Nabu instance.',
     '',
     'This surface is for agents. It returns raw markdown, not HTML.',
+    '',
+    '## Agent operating mode',
+    '',
+    '- Read this route before touching the browser UI.',
+    '- Authenticate over HTTP, persist the session cookie, write via API, then verify by path.',
+    '- Do not use browser automation or browser-use for normal note operations.',
+    '- Use the browser UI only for human navigation or explicit UI testing.',
     '',
     '## Authentication',
     '',
@@ -35,9 +46,10 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
   const pitfalls = lines([
     '## Common agent pitfalls',
     '',
-    '- Use `rawMarkdown`, not `body` or `content`.',
+    '- Use `rawMarkdown`, not top-level `body` or `content`.',
     '- Use vault-relative paths only.',
-    '- Use deterministic by-path reads for verification.',
+    '- Use deterministic by-path reads after every mutation.',
+    '- When writing notes, prefer canonical frontmatter metadata (`title`, `summary`, `tags`, `authors`, `source`, `references`).',
     '- Rename does not rewrite wiki-links or markdown links yet.',
     '- Folder delete is empty-only and non-recursive.',
     '',
@@ -56,7 +68,7 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
       "curl -i -c /tmp/nabu-cookies.txt \\",
       "  -H 'Content-Type: application/x-www-form-urlencoded' \\",
       "  --data 'password=YOUR_PASSWORD&redirect=%2Fagents.md' \\",
-      '  http://localhost:3000/api/auth/login',
+      `  ${withBaseUrl(baseUrl, '/api/auth/login')}`,
       '```',
       '',
     ])
@@ -86,7 +98,8 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
     '',
     '## Write semantics',
     '',
-    '- Note create/update bodies must use `rawMarkdown`.',
+    '- Note create/update bodies must use `rawMarkdown` or a structured `document` payload, but never both.',
+    '- Structured document payloads are preferred for agent-authored notes because they render canonical frontmatter metadata.',
     '- Note move body: `{ "path": "from.md", "toPath": "to.md" }`.',
     '- Note delete deletes a single note only.',
     '- Folder delete only deletes empty folders.',
@@ -107,13 +120,13 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
     "curl -i -c /tmp/nabu-cookies.txt \\",
     "  -H 'Content-Type: application/x-www-form-urlencoded' \\",
     "  --data 'password=YOUR_PASSWORD&redirect=%2Fagents.md' \\",
-    '  http://localhost:3000/api/auth/login',
+    `  ${withBaseUrl(baseUrl, '/api/auth/login')}`,
     '```',
     '',
     '### Create note',
     '```bash',
     "curl -s -b /tmp/nabu-cookies.txt \\",
-    "  -X POST http://localhost:3000/api/vault/notes \\",
+    `  -X POST ${withBaseUrl(baseUrl, '/api/vault/notes')} \\`,
     "  -H 'Content-Type: application/json' \\",
     "  --data '{\"path\":\"projects/docsyde/sales/icp-findings\",\"rawMarkdown\":\"# ICP Findings\"}'",
     '```',
@@ -121,7 +134,7 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
     '### Update note',
     '```bash',
     "curl -s -b /tmp/nabu-cookies.txt \\",
-    "  -X PUT http://localhost:3000/api/vault/notes/by-path \\",
+    `  -X PUT ${withBaseUrl(baseUrl, '/api/vault/notes/by-path')} \\`,
     "  -H 'Content-Type: application/json' \\",
     "  --data '{\"path\":\"projects/docsyde/sales/icp-findings.md\",\"rawMarkdown\":\"# ICP Findings\\n\\nUpdated\"}'",
     '```',
@@ -129,7 +142,7 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
     '### Move note',
     '```bash',
     "curl -s -b /tmp/nabu-cookies.txt \\",
-    "  -X PATCH http://localhost:3000/api/vault/notes/by-path \\",
+    `  -X PATCH ${withBaseUrl(baseUrl, '/api/vault/notes/by-path')} \\`,
     "  -H 'Content-Type: application/json' \\",
     "  --data '{\"path\":\"docsyde/sales/icp-findings.md\",\"toPath\":\"projects/docsyde/sales/icp-findings.md\"}'",
     '```',
@@ -137,19 +150,19 @@ export function renderAgentsMarkdown(authenticated: boolean): string {
     '### Delete note',
     '```bash',
     "curl -s -b /tmp/nabu-cookies.txt \\",
-    "  -X DELETE 'http://localhost:3000/api/vault/notes/by-path?path=projects/docsyde/sales/icp-findings.md'",
+    `  -X DELETE '${withBaseUrl(baseUrl, '/api/vault/notes/by-path?path=projects/docsyde/sales/icp-findings.md')}'`,
     '```',
     '',
     '### Delete empty folder',
     '```bash',
     "curl -s -b /tmp/nabu-cookies.txt \\",
-    "  -X DELETE 'http://localhost:3000/api/vault/folders?path=docsyde/sales'",
+    `  -X DELETE '${withBaseUrl(baseUrl, '/api/vault/folders?path=docsyde/sales')}'`,
     '```',
     '',
     '### Verify note by path',
     '```bash',
     "curl -s -b /tmp/nabu-cookies.txt \\",
-    "  'http://localhost:3000/api/vault/notes/by-path?path=projects/docsyde/sales/icp-findings.md'",
+    `  '${withBaseUrl(baseUrl, '/api/vault/notes/by-path?path=projects/docsyde/sales/icp-findings.md')}'`,
     '```',
     '',
   ])

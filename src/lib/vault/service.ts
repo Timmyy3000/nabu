@@ -18,6 +18,7 @@ import {
 } from './filesystem'
 import { buildVaultIndex } from './index'
 import { parseNote, type ParsedVaultNote, type VaultNoteLink } from './parse-note'
+import { normalizeStructuredNoteDocument, renderCanonicalMarkdown, type VaultStructuredNoteDocument } from './write-note'
 import {
   normalizeSearchLimit,
   normalizeSearchOffset,
@@ -112,6 +113,7 @@ type VaultFolderDeleteResult = {
 type VaultNoteWriteInput = {
   path: string | null | undefined
   rawMarkdown: string | null | undefined
+  document?: VaultStructuredNoteDocument | null | undefined
 }
 
 type VaultNoteMoveInput = {
@@ -433,6 +435,45 @@ function normalizeRawMarkdownInput(rawMarkdown: string | null | undefined): stri
   return rawMarkdown
 }
 
+function materializeNoteMarkdown(
+  input: VaultNoteWriteInput,
+  timestamps: { createdAt?: string | null; updatedAt?: string | null } = {},
+): string {
+  const hasRawMarkdown = typeof input.rawMarkdown === 'string' && input.rawMarkdown.trim().length > 0
+  const hasDocument = input.document != null
+
+  if (hasRawMarkdown && hasDocument) {
+    throw new Error('Invalid note write payload')
+  }
+
+  if (hasDocument) {
+    try {
+      return renderCanonicalMarkdown(normalizeStructuredNoteDocument(input.document ?? {}, timestamps))
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Invalid structured note document') {
+        throw new Error('Invalid note write payload')
+      }
+
+      throw error
+    }
+  }
+
+  return normalizeRawMarkdownInput(input.rawMarkdown)
+}
+
+function currentIsoTimestamp(): string {
+  return new Date().toISOString()
+}
+
+async function getExistingNoteCreatedAt(rootPath: string, relPath: string): Promise<string | null> {
+  try {
+    const rawMarkdown = await readFile(path.join(rootPath, relPath), 'utf8')
+    return parseNote({ relPath, rawMarkdown }).createdAt
+  } catch {
+    return null
+  }
+}
+
 function createFolderName(folderPath: string): string {
   if (!folderPath) {
     return ''
@@ -695,8 +736,14 @@ export async function createVaultFolder(folderPathInput: string): Promise<VaultF
 
 export async function createVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteCreateResult> {
   const normalizedPath = normalizeMarkdownNotePathInput(input.path)
-  const rawMarkdown = normalizeRawMarkdownInput(input.rawMarkdown)
   const { rootPath } = await getVaultConfig()
+  const now = currentIsoTimestamp()
+  const rawMarkdown = input.document
+    ? materializeNoteMarkdown(input, {
+        createdAt: now,
+        updatedAt: now,
+      })
+    : materializeNoteMarkdown(input)
 
   try {
     await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
@@ -719,8 +766,14 @@ export async function createVaultNote(input: VaultNoteWriteInput): Promise<Vault
 
 export async function updateVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteUpdateResult> {
   const normalizedPath = normalizeMarkdownNotePathInput(input.path)
-  const rawMarkdown = normalizeRawMarkdownInput(input.rawMarkdown)
   const { rootPath } = await getVaultConfig()
+  const now = currentIsoTimestamp()
+  const rawMarkdown = input.document
+    ? materializeNoteMarkdown(input, {
+        createdAt: (await getExistingNoteCreatedAt(rootPath, normalizedPath)) ?? now,
+        updatedAt: now,
+      })
+    : materializeNoteMarkdown(input)
 
   try {
     await updateVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
@@ -1088,6 +1141,15 @@ export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promi
     const created = await createVaultNote(input)
     return Response.json(created, { status: 201 })
   } catch (error) {
+    if (error instanceof Error && error.message === 'Invalid note write payload') {
+      return Response.json(
+        {
+          error: 'Invalid request body',
+        },
+        { status: 400 },
+      )
+    }
+
     if (error instanceof Error && error.message.startsWith('Note already exists: ')) {
       const notePath = error.message.replace('Note already exists: ', '')
       return Response.json(
@@ -1114,6 +1176,15 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput):
     const updated = await updateVaultNote(input)
     return Response.json(updated)
   } catch (error) {
+    if (error instanceof Error && error.message === 'Invalid note write payload') {
+      return Response.json(
+        {
+          error: 'Invalid request body',
+        },
+        { status: 400 },
+      )
+    }
+
     if (error instanceof Error && error.message.startsWith('Note not found: ')) {
       const notePath = error.message.replace('Note not found: ', '')
       return Response.json(
