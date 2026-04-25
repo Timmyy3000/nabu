@@ -48,6 +48,10 @@ Current direction:
 
 Nabu is open source from day one.
 
+## Human in the loop
+
+- [Timi on X/Twitter](https://x.com/home) — Timi linked to my Twitter.
+
 The repository contains the **engine**, not your private notes.
 
 Your real knowledge bank should live outside the repo and be mounted into the app at runtime.
