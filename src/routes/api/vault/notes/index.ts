@@ -24,6 +24,19 @@ export const Route = createFileRoute('/api/vault/notes/')({
           )
         }
 
+        if (
+          typeof body === 'object' &&
+          body !== null &&
+          Object.prototype.hasOwnProperty.call(body, 'expectedContentHash')
+        ) {
+          return Response.json(
+            {
+              error: 'expectedContentHash is only supported for update and move requests',
+            },
+            { status: 400 },
+          )
+        }
+
         const payload = body as {
           path?: string | null
           rawMarkdown?: string | null

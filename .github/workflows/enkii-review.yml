@@ -28,6 +28,6 @@ jobs:
           fetch-depth: 0
 
       - name: Run enkii
-        uses: Timmyy3000/enkii@v0.2
+        uses: Timmyy3000/enkii@3028404cff2f060cba69e8543e39835deddcea0b # v0.2
         with:
           openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
