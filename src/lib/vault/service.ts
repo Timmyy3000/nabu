@@ -115,6 +115,9 @@ type VaultNoteWriteInput = {
   path: string | null | undefined
   rawMarkdown: string | null | undefined
   document?: VaultStructuredNoteDocument | null | undefined
+}
+
+type VaultNoteUpdateInput = VaultNoteWriteInput & {
   expectedContentHash?: string | null | undefined
 }
 
@@ -768,49 +771,53 @@ async function assertExpectedContentHash(relPath: string, expectedContentHash: s
 }
 
 export async function createVaultFolder(folderPathInput: string): Promise<VaultFolderCreateResult> {
-  const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
-  const { rootPath } = await getVaultConfig()
-  const created = await createVaultFolderOnDisk(rootPath, normalizedPath)
-  const index = await rebuildVaultIndex()
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
+    const { rootPath } = await getVaultConfig()
+    const created = await createVaultFolderOnDisk(rootPath, normalizedPath)
+    const index = await rebuildVaultIndex()
 
-  return {
-    path: normalizedPath,
-    created,
-    builtAt: index.builtAt,
-  }
+    return {
+      path: normalizedPath,
+      created,
+      builtAt: index.builtAt,
+    }
+  })
 }
 
 export async function createVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteCreateResult> {
-  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
-  const { rootPath } = await getVaultConfig()
-  const now = currentIsoTimestamp()
-  const rawMarkdown = input.document
-    ? materializeNoteMarkdown(input, {
-        createdAt: now,
-        updatedAt: now,
-      })
-    : materializeNoteMarkdown(input)
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+    const { rootPath } = await getVaultConfig()
+    const now = currentIsoTimestamp()
+    const rawMarkdown = input.document
+      ? materializeNoteMarkdown(input, {
+          createdAt: now,
+          updatedAt: now,
+        })
+      : materializeNoteMarkdown(input)
 
-  try {
-    await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
-  } catch (error) {
-    if (error instanceof VaultFileAlreadyExistsError) {
-      throw new Error(`Note already exists: ${normalizedPath}`)
+    try {
+      await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+    } catch (error) {
+      if (error instanceof VaultFileAlreadyExistsError) {
+        throw new Error(`Note already exists: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    throw error
-  }
+    const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
 
-  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
-
-  return {
-    builtAt: index.builtAt,
-    created: true,
-    note,
-  }
+    return {
+      builtAt: index.builtAt,
+      created: true,
+      note,
+    }
+  })
 }
 
-export async function updateVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteUpdateResult> {
+export async function updateVaultNote(input: VaultNoteUpdateInput): Promise<VaultNoteUpdateResult> {
   return withVaultMutation(async () => {
     const normalizedPath = normalizeMarkdownNotePathInput(input.path)
     const { rootPath } = await getVaultConfig()
@@ -877,55 +884,59 @@ export async function moveVaultNote(input: VaultNoteMoveInput): Promise<VaultNot
 }
 
 export async function deleteVaultNote(pathInput: string | null | undefined): Promise<VaultNoteDeleteResult> {
-  const normalizedPath = normalizeMarkdownNotePathInput(pathInput)
-  const { rootPath } = await getVaultConfig()
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeMarkdownNotePathInput(pathInput)
+    const { rootPath } = await getVaultConfig()
 
-  try {
-    await deleteVaultMarkdownFile(rootPath, normalizedPath)
-  } catch (error) {
-    if (error instanceof VaultFileNotFoundError) {
-      throw new Error(`Note not found: ${normalizedPath}`)
+    try {
+      await deleteVaultMarkdownFile(rootPath, normalizedPath)
+    } catch (error) {
+      if (error instanceof VaultFileNotFoundError) {
+        throw new Error(`Note not found: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    throw error
-  }
+    const index = await rebuildVaultIndex()
 
-  const index = await rebuildVaultIndex()
-
-  return {
-    builtAt: index.builtAt,
-    deleted: true,
-    note: {
-      relPath: normalizedPath,
-    },
-  }
+    return {
+      builtAt: index.builtAt,
+      deleted: true,
+      note: {
+        relPath: normalizedPath,
+      },
+    }
+  })
 }
 
 export async function deleteVaultFolder(folderPathInput: string | null | undefined): Promise<VaultFolderDeleteResult> {
-  const normalizedPath = normalizeFolderDeletePathInput(folderPathInput)
-  const { rootPath } = await getVaultConfig()
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeFolderDeletePathInput(folderPathInput)
+    const { rootPath } = await getVaultConfig()
 
-  try {
-    await deleteVaultFolderOnDisk(rootPath, normalizedPath)
-  } catch (error) {
-    if (error instanceof VaultFolderNotFoundError) {
-      throw new Error(`Folder not found: ${normalizedPath}`)
+    try {
+      await deleteVaultFolderOnDisk(rootPath, normalizedPath)
+    } catch (error) {
+      if (error instanceof VaultFolderNotFoundError) {
+        throw new Error(`Folder not found: ${normalizedPath}`)
+      }
+
+      if (error instanceof VaultFolderNotEmptyError) {
+        throw new Error(`Folder not empty: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    if (error instanceof VaultFolderNotEmptyError) {
-      throw new Error(`Folder not empty: ${normalizedPath}`)
+    const index = await rebuildVaultIndex()
+
+    return {
+      builtAt: index.builtAt,
+      deleted: true,
+      path: normalizedPath,
     }
-
-    throw error
-  }
-
-  const index = await rebuildVaultIndex()
-
-  return {
-    builtAt: index.builtAt,
-    deleted: true,
-    path: normalizedPath,
-  }
+  })
 }
 
 function normalizeSearchPath(pathInput: string | null | undefined): string {
@@ -1223,7 +1234,7 @@ export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promi
   }
 }
 
-export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput): Promise<Response> {
+export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput): Promise<Response> {
   try {
     const updated = await updateVaultNote(input)
     return Response.json(updated)

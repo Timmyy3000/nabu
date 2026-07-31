@@ -6,6 +6,7 @@ import {
   __resetVaultServiceForTests,
   createVaultFolder,
   createVaultNote,
+  deleteVaultNote,
   getVaultBrowseData,
   getFolderListing,
   getNoteByPath,
@@ -546,6 +547,26 @@ describe('vault service', () => {
         rawMarkdown: '# New content',
       }),
     ).rejects.toThrow('Note already exists')
+  })
+
+  it('keeps the index consistent when create and delete mutations overlap', async () => {
+    await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+      'ideas/remove-me.md': '# Remove me',
+    })
+
+    await Promise.all([
+      createVaultNote({
+        path: 'ideas/created.md',
+        rawMarkdown: '# Created',
+      }),
+      deleteVaultNote('ideas/remove-me.md'),
+    ])
+
+    const index = await getVaultIndex()
+    expect(index.byRelPath.has('ideas/created.md')).toBe(true)
+    expect(index.byRelPath.has('ideas/remove-me.md')).toBe(false)
+    expect(index.stats.noteCount).toBe(2)
   })
 
   it('updates notes and makes updated content immediately searchable', async () => {

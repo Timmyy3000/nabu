@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, rename, rmdir, rm, realpath, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readdir, rename, rmdir, rm, realpath, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 
@@ -176,27 +176,44 @@ async function assertSafeTarget(absolutePath: string, relPath: string, expectedT
   return currentStat
 }
 
-async function replaceVaultFile(absolutePath: string, rawMarkdown: string): Promise<void> {
+type VaultFileReplacementOperations = {
+  copyFile: typeof copyFile
+  rename: typeof rename
+  rm: typeof rm
+  writeFile: typeof writeFile
+}
+
+const defaultVaultFileReplacementOperations: VaultFileReplacementOperations = {
+  copyFile,
+  rename,
+  rm,
+  writeFile,
+}
+
+export async function replaceVaultFile(
+  absolutePath: string,
+  rawMarkdown: string,
+  operations: VaultFileReplacementOperations = defaultVaultFileReplacementOperations,
+): Promise<void> {
   const temporaryPath = path.join(path.dirname(absolutePath), `.${path.basename(absolutePath)}.${randomUUID()}.tmp`)
 
   try {
-    await writeFile(temporaryPath, rawMarkdown, { encoding: 'utf8', flag: 'wx' })
+    await operations.writeFile(temporaryPath, rawMarkdown, { encoding: 'utf8', flag: 'wx' })
 
     try {
-      await rename(temporaryPath, absolutePath)
+      await operations.rename(temporaryPath, absolutePath)
     } catch (error) {
-      // Windows does not replace an existing file with rename(). The fallback
-      // keeps the write complete, while the temporary file prevents partial
-      // content from becoming visible during normal operation.
+      // Windows does not replace an existing file with rename(). Copying over
+      // the destination keeps the original in place if the fallback itself
+      // fails; the temporary file is cleaned up in finally.
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST' && (error as NodeJS.ErrnoException).code !== 'EPERM') {
         throw error
       }
 
-      await rm(absolutePath)
-      await rename(temporaryPath, absolutePath)
+      await operations.copyFile(temporaryPath, absolutePath)
     }
   } finally {
-    await rm(temporaryPath, { force: true }).catch(() => undefined)
+    await operations.rm(temporaryPath, { force: true }).catch(() => undefined)
   }
 }
 

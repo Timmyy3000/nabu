@@ -212,6 +212,12 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
       path: input.path,
       rawMarkdown: input.rawMarkdown ?? null,
       document: (input.document ?? null) as VaultStructuredNoteDocument | null,
+    }
+  }
+
+  function toVaultUpdateInput(input: NoteWriteInput) {
+    return {
+      ...toVaultWriteInput(input),
       expectedContentHash: input.expectedContentHash ?? null,
     }
   }
@@ -268,7 +274,7 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
         }
         return current
       })
-      return addContentHash(await updateVaultNote(toVaultWriteInput(input)))
+      return addContentHash(await updateVaultNote(toVaultUpdateInput(input)))
     },
     async moveNote(input) {
       const { moveVaultNote } = await import('../vault/service')
