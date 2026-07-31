@@ -10,6 +10,11 @@ const getAuthStatus = createServerFn({ method: 'GET' }).handler(async ({ request
   }
 })
 
+const reportUsage = createServerFn({ method: 'GET' }).handler(async () => {
+  const { reportUsage } = await import('../lib/usage')
+  void reportUsage()
+})
+
 const loadVaultBrowse = createServerFn({ method: 'GET' })
   .inputValidator((input: { folder: string; note: string }) => input)
   .handler(async ({ data }) =>
@@ -61,6 +66,7 @@ export const Route = createFileRoute('/')({
     searchTag: search.searchTag,
   }),
   loader: async ({ deps }) => {
+    await reportUsage()
     const browse = await loadVaultBrowse({
       data: {
         folder: deps.folder,
