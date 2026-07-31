@@ -66,7 +66,7 @@ describe('listMarkdownFiles', () => {
     const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'nabu-vault-outside-'))
     tempRoots.push(outsideRoot)
     await writeFile(path.join(outsideRoot, 'secret.md'), '# secret')
-    await symlink(outsideRoot, path.join(rootPath, 'linked-outside'))
+    await symlink(outsideRoot, path.join(rootPath, 'linked-outside'), process.platform === 'win32' ? 'junction' : 'dir')
 
     const files = await listMarkdownFiles(rootPath)
 

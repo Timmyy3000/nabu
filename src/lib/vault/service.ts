@@ -967,6 +967,7 @@ export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSe
 
   return searchVaultIndex({
     notes: index.notes,
+    searchDocuments: index.searchDocuments,
     query: queryData.query,
     path: normalizedPath,
     tag: normalizedTag,
