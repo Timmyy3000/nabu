@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import os from 'node:os'
 
-const DEFAULT_URL = 'https://drain.drain.timi.click.sslip.io/v1/events'
+const DEFAULT_URL = 'https://drain.timi.click'
 const HEARTBEAT_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000
 
 type UsageState = { instanceId: string; lastSentAt?: number }
