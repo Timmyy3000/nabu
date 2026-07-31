@@ -40,8 +40,18 @@ export type VaultSearchResponse = {
   results: VaultSearchResult[]
 }
 
+export type VaultSearchDocument = {
+  note: ParsedVaultNote
+  normalizedSlug: string
+  normalizedTitle: string
+  normalizedSummary: string
+  normalizedBody: string
+  normalizedTags: string[]
+}
+
 export type SearchVaultIndexInput = {
   notes: ParsedVaultNote[]
+  searchDocuments?: VaultSearchDocument[]
   query: string
   path: string
   tag: string | null
@@ -114,6 +124,17 @@ function normalizeSearchText(value: string): string {
     .replace(/\s+/g, ' ')
 }
 
+export function createVaultSearchDocument(note: ParsedVaultNote): VaultSearchDocument {
+  return {
+    note,
+    normalizedSlug: normalizeSearchText(note.slug),
+    normalizedTitle: normalizeSearchText(note.title),
+    normalizedSummary: normalizeSearchText(note.summary ?? ''),
+    normalizedBody: normalizeSearchText(note.body),
+    normalizedTags: note.tags.map((tag) => normalizeSearchText(tag)),
+  }
+}
+
 function includesAllTokens(value: string, tokens: string[]): boolean {
   if (tokens.length === 0) {
     return false
@@ -142,8 +163,8 @@ function isInPathScope(relPath: string, pathScope: string): boolean {
   return relPath.startsWith(`${pathScope}/`)
 }
 
-function pathScopeExists(notes: ParsedVaultNote[], pathScope: string): boolean {
-  return notes.some((note) => isInPathScope(note.relPath, pathScope))
+function pathScopeExists(documents: VaultSearchDocument[], pathScope: string): boolean {
+  return documents.some((document) => isInPathScope(document.note.relPath, pathScope))
 }
 
 function truncateSnippet(source: string, startIndex: number): string {
@@ -251,20 +272,15 @@ function compareSearchResults(left: VaultSearchResult, right: VaultSearchResult)
 }
 
 function scoreNote(input: {
-  note: ParsedVaultNote
+  document: VaultSearchDocument
   normalizedQuery: string
   exactPhrases: string[]
   tokens: string[]
   pathScope: string
   tag: string | null
 }): VaultSearchResult | null {
-  const { note, normalizedQuery, exactPhrases, tokens, pathScope, tag } = input
-
-  const normalizedSlug = normalizeSearchText(note.slug)
-  const normalizedTitle = normalizeSearchText(note.title)
-  const normalizedSummary = normalizeSearchText(note.summary ?? '')
-  const normalizedBody = normalizeSearchText(note.body)
-  const normalizedTags = note.tags.map((tag) => normalizeSearchText(tag))
+  const { document, normalizedQuery, exactPhrases, tokens, pathScope, tag } = input
+  const { note, normalizedSlug, normalizedTitle, normalizedSummary, normalizedBody, normalizedTags } = document
 
   if (tag && !normalizedTags.includes(tag)) {
     return null
@@ -363,17 +379,18 @@ function scoreNote(input: {
 export function searchVaultIndex(input: SearchVaultIndexInput): VaultSearchResponse {
   const queryData = normalizeSearchQuery(input.query)
   const normalizedTag = normalizeSearchTag(input.tag)
+  const searchDocuments = input.searchDocuments ?? input.notes.map(createVaultSearchDocument)
 
-  const scopedNotes = input.path
-    ? pathScopeExists(input.notes, input.path)
-      ? input.notes.filter((note) => isInPathScope(note.relPath, input.path))
+  const scopedDocuments = input.path
+    ? pathScopeExists(searchDocuments, input.path)
+      ? searchDocuments.filter((document) => isInPathScope(document.note.relPath, input.path))
       : []
-    : input.notes
+    : searchDocuments
 
-  const matched = scopedNotes
-    .map((note) =>
+  const matched = scopedDocuments
+    .map((document) =>
       scoreNote({
-        note,
+        document,
         normalizedQuery: queryData.normalizedQuery,
         exactPhrases: queryData.exactPhrases,
         tokens: queryData.tokens,

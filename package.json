@@ -7,9 +7,12 @@
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
+    "verify:build": "node scripts/verify-production-assets.mjs",
+    "verify:server": "node scripts/verify-production-server.mjs",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
+    "benchmark:search": "vitest bench src/lib/vault/search.bench.ts",
     "test": "vitest",
     "test:watch": "vitest",
     "test:bun": "vitest run",
