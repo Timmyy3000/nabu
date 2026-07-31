@@ -336,6 +336,14 @@ describe('vault retrieval contracts', () => {
     })
   })
 
+  it('rejects deleting the vault root folder', async () => {
+    await createVaultFixture({})
+
+    const response = await deleteVaultFolderResponse({ path: null })
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid folder path' })
+  })
+
   it('returns 400 for invalid folder path and 404 for unknown folder path', async () => {
     await createVaultFixture({
       'ideas/note.md': '# Note',

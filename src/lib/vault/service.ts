@@ -412,6 +412,16 @@ function normalizeFolderCreatePathInput(folderPath: string | null | undefined): 
   return normalizeVaultPath(trimmed)
 }
 
+function normalizeFolderDeletePathInput(folderPath: string | null | undefined): string {
+  const normalized = normalizeFolderPathInput(folderPath)
+
+  if (!normalized) {
+    throw new Error('Folder path is required')
+  }
+
+  return normalized
+}
+
 function normalizeMarkdownNotePathInput(notePath: string | null | undefined): string {
   const normalized = normalizeNotePathInput(notePath)
   const withMarkdownExtension = normalized.toLowerCase().endsWith('.md') ? normalized : `${normalized}.md`
@@ -850,7 +860,7 @@ export async function deleteVaultNote(pathInput: string | null | undefined): Pro
 }
 
 export async function deleteVaultFolder(folderPathInput: string | null | undefined): Promise<VaultFolderDeleteResult> {
-  const normalizedPath = normalizeFolderPathInput(folderPathInput)
+  const normalizedPath = normalizeFolderDeletePathInput(folderPathInput)
   const { rootPath } = await getVaultConfig()
 
   try {

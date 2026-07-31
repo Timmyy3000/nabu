@@ -10,6 +10,7 @@ import {
   updateVaultMarkdownFile,
   VaultFileAlreadyExistsError,
   VaultFileNotFoundError,
+  VaultPathSafetyError,
 } from './filesystem'
 
 const tempRoots: string[] = []
@@ -60,7 +61,7 @@ describe('listMarkdownFiles', () => {
     expect(files).not.toContain('README.txt')
   })
 
-  it('does not follow symlinked directories out of the vault', async () => {
+  it.skipIf(process.platform === 'win32')('does not follow symlinked directories out of the vault', async () => {
     const rootPath = await createVaultFixture()
     const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'nabu-vault-outside-'))
     tempRoots.push(outsideRoot)
@@ -121,5 +122,32 @@ describe('vault write primitives', () => {
 
     const content = await readFile(path.join(rootPath, 'ideas', 'ai', 'agent-memory.md'), 'utf8')
     expect(content).toBe('# Updated memory')
+  })
+
+  it.skipIf(process.platform === 'win32')('rejects writes through symlinked files and parent directories', async () => {
+    const rootPath = await createVaultFixture()
+    const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'nabu-vault-outside-'))
+    tempRoots.push(outsideRoot)
+    const outsideNote = path.join(outsideRoot, 'secret.md')
+    await writeFile(outsideNote, '# secret')
+    await symlink(outsideNote, path.join(rootPath, 'linked.md'))
+    await symlink(outsideRoot, path.join(rootPath, 'linked-folder'))
+
+    await expect(updateVaultMarkdownFile(rootPath, 'linked.md', '# changed')).rejects.toBeInstanceOf(
+      VaultPathSafetyError,
+    )
+    await expect(
+      createVaultMarkdownFile(rootPath, 'linked-folder/new.md', '# changed'),
+    ).rejects.toBeInstanceOf(VaultPathSafetyError)
+
+    await expect(readFile(outsideNote, 'utf8')).resolves.toBe('# secret')
+  })
+
+  it('rejects deleting the vault root', async () => {
+    const rootPath = await createVaultFixture()
+
+    await expect(import('./filesystem').then(({ deleteVaultFolder }) => deleteVaultFolder(rootPath, ''))).rejects.toBeInstanceOf(
+      VaultPathSafetyError,
+    )
   })
 })

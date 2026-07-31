@@ -1,4 +1,5 @@
-import { mkdir, readdir, rename, rmdir, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, rename, rmdir, rm, stat, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 
 function isMarkdownFile(fileName: string): boolean {
@@ -99,11 +100,79 @@ export class VaultPathConflictError extends Error {
   }
 }
 
+export class VaultPathSafetyError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'VaultPathSafetyError'
+  }
+}
+
+function isInsideRoot(rootPath: string, targetPath: string): boolean {
+  const relativePath = path.relative(rootPath, targetPath)
+  return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+}
+
+async function assertSafeVaultPath(rootPath: string, relPath: string, options?: { allowMissing: boolean }) {
+  const allowMissing = options?.allowMissing ?? false
+  const absoluteRoot = path.resolve(rootPath)
+  const absoluteTarget = path.resolve(absoluteRoot, relPath)
+
+  if (!isInsideRoot(absoluteRoot, absoluteTarget)) {
+    throw new VaultPathSafetyError(`Path escapes vault root: ${relPath}`)
+  }
+
+  const segments = path.relative(absoluteRoot, absoluteTarget).split(path.sep).filter(Boolean)
+  let currentPath = absoluteRoot
+
+  for (const segment of segments) {
+    currentPath = path.join(currentPath, segment)
+
+    try {
+      const currentStat = await lstat(currentPath)
+      if (currentStat.isSymbolicLink()) {
+        throw new VaultPathSafetyError(`Symbolic links are not allowed in vault paths: ${relPath}`)
+      }
+
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && allowMissing) {
+        return
+      }
+
+      throw error
+    }
+  }
+}
+
 function toAbsoluteVaultPath(rootPath: string, relPath: string): string {
   return path.join(rootPath, relPath)
 }
 
+async function replaceVaultFile(absolutePath: string, rawMarkdown: string): Promise<void> {
+  const temporaryPath = path.join(path.dirname(absolutePath), `.${path.basename(absolutePath)}.${randomUUID()}.tmp`)
+
+  try {
+    await writeFile(temporaryPath, rawMarkdown, { encoding: 'utf8', flag: 'wx' })
+
+    try {
+      await rename(temporaryPath, absolutePath)
+    } catch (error) {
+      // Windows does not replace an existing file with rename(). The fallback
+      // keeps the write complete, while the temporary file prevents partial
+      // content from becoming visible during normal operation.
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' && (error as NodeJS.ErrnoException).code !== 'EPERM') {
+        throw error
+      }
+
+      await rm(absolutePath)
+      await rename(temporaryPath, absolutePath)
+    }
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined)
+  }
+}
+
 export async function createVaultFolder(rootPath: string, relPath: string): Promise<boolean> {
+  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
   const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
 
   try {
@@ -124,6 +193,7 @@ export async function createVaultFolder(rootPath: string, relPath: string): Prom
 }
 
 export async function createVaultMarkdownFile(rootPath: string, relPath: string, rawMarkdown: string): Promise<void> {
+  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
   const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
   await mkdir(path.dirname(absolutePath), { recursive: true })
 
@@ -139,6 +209,7 @@ export async function createVaultMarkdownFile(rootPath: string, relPath: string,
 }
 
 export async function updateVaultMarkdownFile(rootPath: string, relPath: string, rawMarkdown: string): Promise<void> {
+  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
   const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
 
   try {
@@ -158,10 +229,12 @@ export async function updateVaultMarkdownFile(rootPath: string, relPath: string,
     throw error
   }
 
-  await writeFile(absolutePath, rawMarkdown, { encoding: 'utf8' })
+  await replaceVaultFile(absolutePath, rawMarkdown)
 }
 
 export async function moveVaultMarkdownFile(rootPath: string, fromRelPath: string, toRelPath: string): Promise<void> {
+  await assertSafeVaultPath(rootPath, fromRelPath, { allowMissing: true })
+  await assertSafeVaultPath(rootPath, toRelPath, { allowMissing: true })
   const fromAbsolutePath = toAbsoluteVaultPath(rootPath, fromRelPath)
   const toAbsolutePath = toAbsoluteVaultPath(rootPath, toRelPath)
 
@@ -200,6 +273,7 @@ export async function moveVaultMarkdownFile(rootPath: string, fromRelPath: strin
 }
 
 export async function deleteVaultMarkdownFile(rootPath: string, relPath: string): Promise<void> {
+  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
   const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
 
   try {
@@ -223,6 +297,7 @@ export async function deleteVaultMarkdownFile(rootPath: string, relPath: string)
 }
 
 export async function deleteVaultFolder(rootPath: string, relPath: string): Promise<void> {
+  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
   const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
 
   try {
