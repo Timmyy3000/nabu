@@ -1,8 +1,12 @@
 import { Client } from '@modelcontextprotocol/client'
 import { InMemoryTransport, type McpServer } from '@modelcontextprotocol/server'
+import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createNabuMcpServer } from './server'
 import type { KnowledgeGateway } from './gateway'
+
+const AUTO_NEGOTIATION = { versionNegotiation: { mode: 'auto' as const } }
+type ClientOptions = NonNullable<ConstructorParameters<typeof Client>[1]>
 
 function createFakeGateway(): KnowledgeGateway {
   return {
@@ -18,12 +22,14 @@ function createFakeGateway(): KnowledgeGateway {
   }
 }
 
-async function connectTestPair(server: McpServer) {
+async function connectTestPair(
+  server: McpServer,
+  options?: ClientOptions,
+) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const client = new Client(
-    { name: 'nabu-mcp-test-client', version: '1.0.0' },
-    { versionNegotiation: { mode: 'auto' } },
-  )
+  const client = options
+    ? new Client({ name: 'nabu-mcp-test-client', version: '1.0.0' }, options)
+    : new Client({ name: 'nabu-mcp-test-client', version: '1.0.0' })
 
   await server.connect(serverTransport)
   await client.connect(clientTransport)
@@ -40,7 +46,7 @@ describe('Nabu MCP server', () => {
   })
 
   it('exposes vault traversal and mutation tools through the modern protocol', async () => {
-    const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()))
+    const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()), AUTO_NEGOTIATION)
     connectedServer = pair.server
 
     const tools = await pair.client.listTools()
@@ -61,8 +67,32 @@ describe('Nabu MCP server', () => {
     expect(result.structuredContent).toEqual({ query: 'agent', results: [{ relPath: 'ideas/agent.md' }] })
   })
 
-  it('exposes the vault and note resources', async () => {
+  it('supports an explicit modern protocol pin', async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const handle = serveStdio(() => createNabuMcpServer(createFakeGateway()), { transport: serverTransport })
+    const client = new Client(
+      { name: 'nabu-mcp-test-client', version: '1.0.0' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    )
+
+    try {
+      await client.connect(clientTransport)
+      await expect(client.listTools()).resolves.toMatchObject({ tools: expect.any(Array) })
+    } finally {
+      await client.close()
+      await handle.close()
+    }
+  })
+
+  it('keeps the legacy-default client path interoperable', async () => {
     const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()))
+    connectedServer = pair.server
+
+    await expect(pair.client.listResources()).resolves.toMatchObject({ resources: expect.any(Array) })
+  })
+
+  it('exposes the vault and note resources', async () => {
+    const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()), AUTO_NEGOTIATION)
     connectedServer = pair.server
 
     const resources = await pair.client.listResources()
@@ -76,11 +106,24 @@ describe('Nabu MCP server', () => {
   it('returns bounded tool errors for oversized results', async () => {
     const gateway = createFakeGateway()
     gateway.getVaultSummary = async () => ({ value: 'x'.repeat(2_000_001) })
-    const pair = await connectTestPair(createNabuMcpServer(gateway))
+    const pair = await connectTestPair(createNabuMcpServer(gateway), AUTO_NEGOTIATION)
     connectedServer = pair.server
 
     const result = await pair.client.callTool({ name: 'get_vault_summary', arguments: {} })
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'MCP result exceeds the 2000000-byte limit' }])
+  })
+
+  it('bounds structured note documents as well as raw markdown', async () => {
+    const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()), AUTO_NEGOTIATION)
+    connectedServer = pair.server
+
+    const result = await pair.client.callTool({
+      name: 'create_note',
+      arguments: { path: 'large.md', document: { body: 'x'.repeat(1_000_001) } },
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0]).toMatchObject({ type: 'text' })
   })
 })

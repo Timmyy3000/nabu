@@ -19,6 +19,7 @@ import {
   moveVaultNoteByPathResponse,
   updateVaultNoteByPathResponse,
 } from './service'
+import { hashVaultNote } from './content-hash'
 
 const ORIGINAL_KNOWLEDGE_PATH = process.env.KNOWLEDGE_PATH
 const tempRoots: string[] = []
@@ -583,7 +584,7 @@ describe('vault retrieval contracts', () => {
   })
 
   it('updates notes with 200, 404, and 400 semantics', async () => {
-    await createVaultFixture({
+    const root = await createVaultFixture({
       'projects/nabu/specs/agent-operability.md': '# Agent Operability\n\nInitial.',
     })
 
@@ -624,6 +625,16 @@ describe('vault retrieval contracts', () => {
       error: 'Invalid note path',
       path: '../secrets.md',
     })
+
+    const current = await getVaultNoteByPathResponse('projects/nabu/specs/agent-operability.md')
+    const currentPayload = await current.json()
+    await writeFile(path.join(root, 'projects/nabu/specs/agent-operability.md'), '# External change')
+    const stale = await updateVaultNoteByPathResponse({
+      path: 'projects/nabu/specs/agent-operability.md',
+      rawMarkdown: '# Agent Operability\n\nStale.',
+      expectedContentHash: hashVaultNote(currentPayload.note),
+    })
+    expect(stale.status).toBe(409)
   })
 
   it('moves notes with 200, 404, 409, and 400 semantics', async () => {

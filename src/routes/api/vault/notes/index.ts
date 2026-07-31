@@ -36,11 +36,13 @@ export const Route = createFileRoute('/api/vault/notes/')({
             references?: unknown
             body?: string | null
           } | null
+          expectedContentHash?: string | null
         }
         return createVaultNoteResponse({
           path: payload.path ?? null,
           rawMarkdown: payload.rawMarkdown ?? null,
-          document: payload.document ?? null,
+        document: payload.document ?? null,
+        expectedContentHash: payload.expectedContentHash ?? null,
         })
       },
     },

@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto'
 import path from 'node:path'
 import type { VaultStructuredNoteDocument } from '../vault/write-note'
+import { hashVaultNote } from '../vault/content-hash'
 
 export type NoteWriteInput = {
   path: string
@@ -38,8 +38,7 @@ export class McpConfigurationError extends Error {
 }
 
 function contentHash(value: unknown): string {
-  const note = typeof value === 'object' && value !== null && 'note' in value ? value.note : value
-  return createHash('sha256').update(JSON.stringify(note) ?? 'null').digest('hex')
+  return hashVaultNote(value)
 }
 
 function addContentHash(value: unknown): unknown {
@@ -213,6 +212,7 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
       path: input.path,
       rawMarkdown: input.rawMarkdown ?? null,
       document: (input.document ?? null) as VaultStructuredNoteDocument | null,
+      expectedContentHash: input.expectedContentHash ?? null,
     }
   }
 

@@ -4,7 +4,13 @@ import { MCP_MAX_NOTE_BYTES, MCP_MAX_RESULT_BYTES, type KnowledgeGateway } from 
 
 const pathSchema = z.string().trim().min(1).max(4_096)
 const optionalPathSchema = z.string().trim().max(4_096).optional()
-const documentSchema = z.record(z.string(), z.unknown()).optional()
+const documentSchema = z
+  .record(z.string(), z.unknown())
+  .refine(
+    (value) => new TextEncoder().encode(JSON.stringify(value)).byteLength <= MCP_MAX_NOTE_BYTES,
+    'document exceeds the byte limit',
+  )
+  .optional()
 
 const noteWriteSchema = z
   .object({

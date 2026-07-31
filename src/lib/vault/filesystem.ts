@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, rename, rmdir, rm, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, rename, rmdir, rm, realpath, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 
@@ -112,8 +112,7 @@ function isInsideRoot(rootPath: string, targetPath: string): boolean {
   return relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
 }
 
-async function assertSafeVaultPath(rootPath: string, relPath: string, options?: { allowMissing: boolean }) {
-  const allowMissing = options?.allowMissing ?? false
+async function resolveSafeParentPath(rootPath: string, relPath: string, createMissingParents: boolean): Promise<string> {
   const absoluteRoot = path.resolve(rootPath)
   const absoluteTarget = path.resolve(absoluteRoot, relPath)
 
@@ -122,29 +121,59 @@ async function assertSafeVaultPath(rootPath: string, relPath: string, options?: 
   }
 
   const segments = path.relative(absoluteRoot, absoluteTarget).split(path.sep).filter(Boolean)
-  let currentPath = absoluteRoot
+  const targetName = segments.pop()
+  if (!targetName) {
+    throw new VaultPathSafetyError(`Path resolves to the vault root: ${relPath}`)
+  }
+
+  let currentPath = await realpath(absoluteRoot)
 
   for (const segment of segments) {
-    currentPath = path.join(currentPath, segment)
+    const nextPath = path.join(currentPath, segment)
 
     try {
-      const currentStat = await lstat(currentPath)
+      const currentStat = await lstat(nextPath)
       if (currentStat.isSymbolicLink()) {
         throw new VaultPathSafetyError(`Symbolic links are not allowed in vault paths: ${relPath}`)
       }
-
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && allowMissing) {
-        return
+      if (!currentStat.isDirectory()) {
+        throw new VaultPathSafetyError(`Vault parent is not a directory: ${relPath}`)
       }
-
-      throw error
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && createMissingParents) {
+        await mkdir(nextPath)
+        const createdStat = await lstat(nextPath)
+        if (createdStat.isSymbolicLink() || !createdStat.isDirectory()) {
+          throw new VaultPathSafetyError(`Unsafe vault parent: ${relPath}`)
+        }
+      } else {
+        throw error
+      }
     }
+
+    currentPath = nextPath
+  }
+
+  return path.join(currentPath, targetName)
+}
+
+async function resolveExistingParentPath(rootPath: string, relPath: string, missingError: Error): Promise<string> {
+  try {
+    return await resolveSafeParentPath(rootPath, relPath, false)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw missingError
+    }
+    throw error
   }
 }
 
-function toAbsoluteVaultPath(rootPath: string, relPath: string): string {
-  return path.join(rootPath, relPath)
+async function assertSafeTarget(absolutePath: string, relPath: string, expectedType?: 'file' | 'directory') {
+  const currentStat = await lstat(absolutePath)
+  if (currentStat.isSymbolicLink() || (expectedType === 'file' && !currentStat.isFile()) || (expectedType === 'directory' && !currentStat.isDirectory())) {
+    throw new VaultPathSafetyError(`Unsafe vault path: ${relPath}`)
+  }
+  return currentStat
 }
 
 async function replaceVaultFile(absolutePath: string, rawMarkdown: string): Promise<void> {
@@ -172,11 +201,10 @@ async function replaceVaultFile(absolutePath: string, rawMarkdown: string): Prom
 }
 
 export async function createVaultFolder(rootPath: string, relPath: string): Promise<boolean> {
-  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
-  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
+  const absolutePath = await resolveSafeParentPath(rootPath, relPath, true)
 
   try {
-    const existing = await stat(absolutePath)
+    const existing = await assertSafeTarget(absolutePath, relPath)
     if (!existing.isDirectory()) {
       throw new Error('Folder path already exists as a file')
     }
@@ -188,14 +216,20 @@ export async function createVaultFolder(rootPath: string, relPath: string): Prom
     }
   }
 
-  await mkdir(absolutePath, { recursive: true })
+  await mkdir(absolutePath)
   return true
 }
 
 export async function createVaultMarkdownFile(rootPath: string, relPath: string, rawMarkdown: string): Promise<void> {
-  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
-  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
-  await mkdir(path.dirname(absolutePath), { recursive: true })
+  const absolutePath = await resolveSafeParentPath(rootPath, relPath, true)
+
+  try {
+    await assertSafeTarget(absolutePath, relPath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error
+    }
+  }
 
   try {
     await writeFile(absolutePath, rawMarkdown, { encoding: 'utf8', flag: 'wx' })
@@ -209,11 +243,14 @@ export async function createVaultMarkdownFile(rootPath: string, relPath: string,
 }
 
 export async function updateVaultMarkdownFile(rootPath: string, relPath: string, rawMarkdown: string): Promise<void> {
-  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
-  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
+  const absolutePath = await resolveExistingParentPath(
+    rootPath,
+    relPath,
+    new VaultFileNotFoundError(`File not found: ${relPath}`),
+  )
 
   try {
-    const existing = await stat(absolutePath)
+    const existing = await assertSafeTarget(absolutePath, relPath)
     if (!existing.isFile()) {
       throw new VaultFileNotFoundError(`File not found: ${relPath}`)
     }
@@ -233,13 +270,15 @@ export async function updateVaultMarkdownFile(rootPath: string, relPath: string,
 }
 
 export async function moveVaultMarkdownFile(rootPath: string, fromRelPath: string, toRelPath: string): Promise<void> {
-  await assertSafeVaultPath(rootPath, fromRelPath, { allowMissing: true })
-  await assertSafeVaultPath(rootPath, toRelPath, { allowMissing: true })
-  const fromAbsolutePath = toAbsoluteVaultPath(rootPath, fromRelPath)
-  const toAbsolutePath = toAbsoluteVaultPath(rootPath, toRelPath)
+  const fromAbsolutePath = await resolveExistingParentPath(
+    rootPath,
+    fromRelPath,
+    new VaultFileNotFoundError(`File not found: ${fromRelPath}`),
+  )
+  const toAbsolutePath = await resolveSafeParentPath(rootPath, toRelPath, true)
 
   try {
-    const existing = await stat(fromAbsolutePath)
+    const existing = await assertSafeTarget(fromAbsolutePath, fromRelPath)
     if (!existing.isFile()) {
       throw new VaultFileNotFoundError(`File not found: ${fromRelPath}`)
     }
@@ -256,7 +295,7 @@ export async function moveVaultMarkdownFile(rootPath: string, fromRelPath: strin
   }
 
   try {
-    await stat(toAbsolutePath)
+    await assertSafeTarget(toAbsolutePath, toRelPath)
     throw new VaultPathConflictError(`Path already exists: ${toRelPath}`)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -268,16 +307,18 @@ export async function moveVaultMarkdownFile(rootPath: string, fromRelPath: strin
     }
   }
 
-  await mkdir(path.dirname(toAbsolutePath), { recursive: true })
   await rename(fromAbsolutePath, toAbsolutePath)
 }
 
 export async function deleteVaultMarkdownFile(rootPath: string, relPath: string): Promise<void> {
-  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
-  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
+  const absolutePath = await resolveExistingParentPath(
+    rootPath,
+    relPath,
+    new VaultFileNotFoundError(`File not found: ${relPath}`),
+  )
 
   try {
-    const existing = await stat(absolutePath)
+    const existing = await assertSafeTarget(absolutePath, relPath)
     if (!existing.isFile()) {
       throw new VaultFileNotFoundError(`File not found: ${relPath}`)
     }
@@ -297,11 +338,14 @@ export async function deleteVaultMarkdownFile(rootPath: string, relPath: string)
 }
 
 export async function deleteVaultFolder(rootPath: string, relPath: string): Promise<void> {
-  await assertSafeVaultPath(rootPath, relPath, { allowMissing: true })
-  const absolutePath = toAbsoluteVaultPath(rootPath, relPath)
+  const absolutePath = await resolveExistingParentPath(
+    rootPath,
+    relPath,
+    new VaultFolderNotFoundError(`Folder not found: ${relPath}`),
+  )
 
   try {
-    const existing = await stat(absolutePath)
+    const existing = await assertSafeTarget(absolutePath, relPath)
     if (!existing.isDirectory()) {
       throw new VaultFolderNotFoundError(`Folder not found: ${relPath}`)
     }
