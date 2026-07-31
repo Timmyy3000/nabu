@@ -67,6 +67,22 @@ describe('Nabu MCP server', () => {
     expect(result.structuredContent).toEqual({ query: 'agent', results: [{ relPath: 'ideas/agent.md' }] })
   })
 
+  it('rejects compare-and-swap hashes on create_note', async () => {
+    const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()), AUTO_NEGOTIATION)
+    connectedServer = pair.server
+
+    const result = await pair.client.callTool({
+      name: 'create_note',
+      arguments: {
+        path: 'ideas/new.md',
+        rawMarkdown: '# New',
+        expectedContentHash: 'a'.repeat(64),
+      },
+    })
+
+    expect(result.isError).toBe(true)
+  })
+
   it('supports an explicit modern protocol pin', async () => {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
     const handle = serveStdio(() => createNabuMcpServer(createFakeGateway()), { transport: serverTransport })

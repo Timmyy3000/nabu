@@ -12,17 +12,29 @@ const documentSchema = z
   )
   .optional()
 
-const noteWriteSchema = z
+const noteWriteShape = {
+  path: pathSchema,
+  rawMarkdown: z
+    .string()
+    .max(MCP_MAX_NOTE_BYTES)
+    .refine((value) => new TextEncoder().encode(value).byteLength <= MCP_MAX_NOTE_BYTES, 'rawMarkdown exceeds the byte limit')
+    .optional(),
+  document: documentSchema,
+}
+
+const noteCreateSchema = z
+  .object(noteWriteShape)
+  .strict()
+  .refine((input) => Boolean(input.rawMarkdown?.trim()) !== Boolean(input.document), {
+    message: 'Provide exactly one of rawMarkdown or document',
+  })
+
+const noteUpdateSchema = z
   .object({
-    path: pathSchema,
-    rawMarkdown: z
-      .string()
-      .max(MCP_MAX_NOTE_BYTES)
-      .refine((value) => new TextEncoder().encode(value).byteLength <= MCP_MAX_NOTE_BYTES, 'rawMarkdown exceeds the byte limit')
-      .optional(),
-    document: documentSchema,
+    ...noteWriteShape,
     expectedContentHash: z.string().length(64).optional(),
   })
+  .strict()
   .refine((input) => Boolean(input.rawMarkdown?.trim()) !== Boolean(input.document), {
     message: 'Provide exactly one of rawMarkdown or document',
   })
@@ -150,7 +162,7 @@ function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
     {
       title: 'Create note',
       description: 'Create a markdown note in the shared knowledge space.',
-      inputSchema: noteWriteSchema,
+      inputSchema: noteCreateSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     (input) => callGateway(() => gateway.createNote(input)),
@@ -161,7 +173,7 @@ function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
     {
       title: 'Update note',
       description: 'Replace one existing markdown note in the shared knowledge space.',
-      inputSchema: noteWriteSchema,
+      inputSchema: noteUpdateSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     (input) => callGateway(() => gateway.updateNote(input)),
