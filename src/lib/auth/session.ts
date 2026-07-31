@@ -19,6 +19,11 @@ function getConfiguredPassword(): string {
   return password
 }
 
+function getConfiguredAgentToken(): string | null {
+  const token = process.env.NABU_AGENT_TOKEN?.trim()
+  return token || null
+}
+
 function encodeBase64Url(value: string): string {
   return Buffer.from(value, 'utf8').toString('base64url')
 }
@@ -150,8 +155,20 @@ export function isAuthenticatedRequest(request: Request, nowMs: number = Date.no
   }
 }
 
+export function isAgentAuthenticatedRequest(request: Request): boolean {
+  const configuredToken = getConfiguredAgentToken()
+  const authorization = request.headers.get('authorization')
+
+  if (!configuredToken || !authorization) {
+    return false
+  }
+
+  const match = /^Bearer (.+)$/i.exec(authorization.trim())
+  return match ? safeCompare(match[1], configuredToken) : false
+}
+
 export function requireAuthenticatedApiRequest(request: Request, nowMs: number = Date.now()): Response | null {
-  if (isAuthenticatedRequest(request, nowMs)) {
+  if (isAuthenticatedRequest(request, nowMs) || isAgentAuthenticatedRequest(request)) {
     return null
   }
 

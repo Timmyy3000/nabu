@@ -6,6 +6,7 @@ import {
   buildLoginResponse,
   buildLogoutResponse,
   createSessionToken,
+  isAgentAuthenticatedRequest,
   isAuthenticatedRequest,
   requireAuthenticatedApiRequest,
   sanitizeRedirectPath,
@@ -13,6 +14,7 @@ import {
 } from './session'
 
 const ORIGINAL_PASSWORD = process.env.NABU_PASSWORD
+const ORIGINAL_AGENT_TOKEN = process.env.NABU_AGENT_TOKEN
 
 beforeEach(() => {
   process.env.NABU_PASSWORD = 'test-password'
@@ -20,6 +22,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env.NABU_PASSWORD = ORIGINAL_PASSWORD
+  process.env.NABU_AGENT_TOKEN = ORIGINAL_AGENT_TOKEN
 })
 
 describe('session auth', () => {
@@ -53,6 +56,32 @@ describe('session auth', () => {
 
     expect(isAuthenticatedRequest(unauthenticated, 2_000)).toBe(false)
     expect(unauthorizedResponse?.status).toBe(401)
+  })
+
+  it('authenticates a configured bearer token for agent requests', () => {
+    process.env.NABU_AGENT_TOKEN = 'agent-token'
+    const request = new Request('http://localhost:3000/api/vault/', {
+      headers: { Authorization: 'Bearer agent-token' },
+    })
+
+    expect(isAgentAuthenticatedRequest(request)).toBe(true)
+    expect(requireAuthenticatedApiRequest(request)).toBeNull()
+  })
+
+  it('rejects missing, malformed, and incorrect bearer tokens', () => {
+    process.env.NABU_AGENT_TOKEN = 'agent-token'
+
+    expect(isAgentAuthenticatedRequest(new Request('http://localhost:3000'))).toBe(false)
+    expect(
+      isAgentAuthenticatedRequest(
+        new Request('http://localhost:3000', { headers: { Authorization: 'Basic agent-token' } }),
+      ),
+    ).toBe(false)
+    expect(
+      isAgentAuthenticatedRequest(
+        new Request('http://localhost:3000', { headers: { Authorization: 'Bearer wrong-token' } }),
+      ),
+    ).toBe(false)
   })
 
   it('builds login success and logout responses with cookies', () => {

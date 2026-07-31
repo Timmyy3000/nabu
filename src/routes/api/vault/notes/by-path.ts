@@ -51,11 +51,13 @@ export const Route = createFileRoute('/api/vault/notes/by-path')({
             references?: unknown
             body?: string | null
           } | null
+          expectedContentHash?: string | null
         }
         return updateVaultNoteByPathResponse({
           path: payload.path ?? null,
           rawMarkdown: payload.rawMarkdown ?? null,
           document: payload.document ?? null,
+          expectedContentHash: payload.expectedContentHash ?? null,
         })
       },
       PATCH: async ({ request }) => {
@@ -78,10 +80,11 @@ export const Route = createFileRoute('/api/vault/notes/by-path')({
           )
         }
 
-        const payload = body as { path?: string | null; toPath?: string | null }
+        const payload = body as { path?: string | null; toPath?: string | null; expectedContentHash?: string | null }
         return moveVaultNoteByPathResponse({
           path: payload.path ?? null,
           toPath: payload.toPath ?? null,
+          expectedContentHash: payload.expectedContentHash ?? null,
         })
       },
       DELETE: async ({ request }) => {

@@ -41,6 +41,15 @@ export function renderAgentsMarkdown(authenticated: boolean, baseUrl = 'http://l
     `- Convenience read: ${bootstrap.identity.convenienceRead}`,
     `- ${bootstrap.identity.note}`,
     '',
+    '## MCP',
+    '',
+    `- Local command: \`${bootstrap.mcp.localCommand}\``,
+    `- Direct-vault environment: ${bootstrap.mcp.directEnvironment.join(', ')}`,
+    `- Deployed-service environment: ${bootstrap.mcp.remoteEnvironment.join(', ')}`,
+    `- Transport: ${bootstrap.mcp.transport}`,
+    `- Native remote MCP endpoint: ${bootstrap.mcp.nativeRemoteEndpoint}`,
+    '- Keep the agent token outside the repository and use HTTPS for non-loopback services.',
+    '',
   ])
 
   const pitfalls = lines([
