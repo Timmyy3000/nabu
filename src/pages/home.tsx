@@ -1,4 +1,4 @@
-import { Link, useRouter } from '@tanstack/react-router'
+import { Link, useBlocker, useRouter } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -397,6 +397,7 @@ export function HomePage({
         return
       }
 
+      setEditorBaseValue(editorValue)
       setEditorSaveState('saved')
       await router.invalidate()
       setEditingNotePath(null)
@@ -408,6 +409,12 @@ export function HomePage({
       setEditorError('Unable to save note')
     }
   }, [browse.note, editorDirty, editorRevision, editorSaveState, editorValue, editing, router])
+
+  useBlocker({
+    shouldBlockFn: () => !window.confirm('Discard unsaved changes?'),
+    enableBeforeUnload: false,
+    disabled: !editorDirty,
+  })
 
   const reloadLatestNote = useCallback(async () => {
     const note = browse.note

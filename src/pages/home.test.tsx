@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomePage } from './home'
 
 vi.mock('@tanstack/react-router', () => ({
+  useBlocker: vi.fn(),
   useRouter: () => ({ invalidate: vi.fn().mockResolvedValue(undefined) }),
   Link: ({ children, to, search, ...props }: ComponentProps<'a'> & { to?: string; search?: unknown }) => {
     const href = typeof to === 'string' ? to : '/'
