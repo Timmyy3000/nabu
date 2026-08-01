@@ -2,6 +2,23 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## [0.6.0] - 2026-08-01
+
+Agent-first MCP release.
+
+### Shipped
+
+- Added a local stdio MCP server with direct-vault and remote deployed-Nabu modes
+- Added MCP tools and resources for vault traversal, search, note reads, and note mutations
+- Added bearer-token authentication for agent-facing API access
+- Hardened vault writes against traversal, symlink, race, and stale-write hazards
+- Improved vault search, indexing, and link navigation performance
+- Added Enkii code and security review automation for pull requests
+
+### Why it matters
+
+Nabu now gives agents a first-class, local MCP interface to the same filesystem-backed knowledge space humans use through the web app, while keeping vault safety and deployment boundaries explicit.
+
 ## [0.4.2] - 2026-04-19
 
 Launch cleanup release.

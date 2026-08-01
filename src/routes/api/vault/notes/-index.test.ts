@@ -185,6 +185,35 @@ describe('POST /api/vault/notes', () => {
     })
   })
 
+  it('rejects compare-and-swap hashes on create requests', async () => {
+    await createVaultFixture({
+      'ideas/seed.md': '# Seed',
+    })
+
+    const handler = Route.options.server.handlers.POST
+    const session = createSessionToken()
+    const response = await handler({
+      request: new Request('http://localhost:3000/api/vault/notes', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
+        },
+        body: JSON.stringify({
+          path: 'resources/leadership/conflict',
+          rawMarkdown: '# Conflict',
+          expectedContentHash: 'a'.repeat(64),
+        }),
+      }),
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(payload).toEqual({
+      error: 'expectedContentHash is only supported for update and move requests',
+    })
+  })
+
   it('rejects create payloads with invalid structured document input', async () => {
     await createVaultFixture({
       'ideas/seed.md': '# Seed',

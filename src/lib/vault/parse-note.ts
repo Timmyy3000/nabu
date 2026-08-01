@@ -200,7 +200,12 @@ function isInternalMarkdownTarget(target: string): boolean {
   const withoutHash = target.split('#')[0] ?? target
   const withoutQuery = withoutHash.split('?')[0] ?? withoutHash
 
-  return withoutQuery.toLowerCase().endsWith('.md')
+  const normalizedPath = withoutQuery.replace(/^\.\//, '')
+  if (!normalizedPath || normalizedPath === '.' || normalizedPath === '..') {
+    return false
+  }
+
+  return normalizedPath.toLowerCase().endsWith('.md') || !path.posix.extname(normalizedPath)
 }
 
 function extractWikiLinks(body: string): Array<{ index: number; link: VaultNoteLink }> {
