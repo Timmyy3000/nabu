@@ -1,5 +1,5 @@
-import { Link, useBlocker, useRouter } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { Link, useBlocker, useNavigate, useRouter } from '@tanstack/react-router'
+import type { FormEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -341,6 +341,7 @@ export function HomePage({
   const folderTitle = browse.folder.path || 'root'
   const searchActive = search?.normalizedQuery ? true : false
   const router = useRouter()
+  const navigate = useNavigate()
   const [detailsOpenFor, setDetailsOpenFor] = useState<string | null>(null)
   const [editingNotePath, setEditingNotePath] = useState<string | null>(null)
   const [editorValue, setEditorValue] = useState('')
@@ -456,6 +457,27 @@ export function HomePage({
     setEditorError(null)
   }
 
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const formData = new FormData(event.currentTarget)
+    const getValue = (name: string) => {
+      const value = formData.get(name)
+      return typeof value === 'string' ? value : ''
+    }
+
+    void navigate({
+      to: '/',
+      search: {
+        folder: getValue('folder'),
+        note: getValue('note'),
+        q: getValue('q'),
+        searchPath: getValue('searchPath'),
+        searchTag: getValue('searchTag'),
+      },
+    })
+  }
+
   useEffect(() => {
     function handleKeydown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
@@ -561,7 +583,7 @@ export function HomePage({
           <span className="scope-val">/{browse.folder.path || ''}</span>
         </div>
 
-        <form method="get" action="/" className="spine-search">
+        <form method="get" action="/" className="spine-search" onSubmit={handleSearchSubmit}>
           <label htmlFor="vault-search-input" className="sr-only">
             search vault
           </label>
