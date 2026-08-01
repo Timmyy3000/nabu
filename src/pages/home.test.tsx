@@ -5,6 +5,8 @@ import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomePage } from './home'
 
+const navigate = vi.hoisted(() => vi.fn())
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, search, ...props }: ComponentProps<'a'> & { to?: string; search?: unknown }) => {
     const href = typeof to === 'string' ? to : '/'
@@ -28,6 +30,7 @@ vi.mock('@tanstack/react-router', () => ({
       </a>
     )
   },
+  useNavigate: () => navigate,
 }))
 
 const writeText = vi.fn().mockResolvedValue(undefined)
@@ -183,6 +186,7 @@ function buildBrowseFixture() {
 }
 
 beforeEach(() => {
+  navigate.mockClear()
   Object.defineProperty(window.navigator, 'clipboard', {
     configurable: true,
     value: { writeText },
@@ -287,6 +291,27 @@ describe('HomePage', () => {
     expect(screen.getAllByText('ideas/alpha.md').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('... agent memory ...')).toBeInTheDocument()
     expect(screen.getByText('title-exact, phrase')).toBeInTheDocument()
+  })
+
+  it('navigates search submissions without a document reload', () => {
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="ideas" searchTagInput="ai" />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /search vault/i }), { target: { value: 'agent memory' } })
+    const form = screen.getByRole('button', { name: 'search' }).closest('form')
+
+    expect(form).not.toBeNull()
+    fireEvent.submit(form as HTMLFormElement)
+
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/',
+      search: {
+        folder: 'ideas',
+        note: 'alpha',
+        q: 'agent memory',
+        searchPath: 'ideas',
+        searchTag: 'ai',
+      },
+    })
   })
 
   it('shows a clear control to return to browse mode', () => {
