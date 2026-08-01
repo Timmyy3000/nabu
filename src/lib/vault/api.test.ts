@@ -19,7 +19,7 @@ import {
   moveVaultNoteByPathResponse,
   updateVaultNoteByPathResponse,
 } from './service'
-import { hashVaultNote } from './content-hash'
+import { hashVaultNote, hashVaultRawMarkdown } from './content-hash'
 
 const ORIGINAL_KNOWLEDGE_PATH = process.env.KNOWLEDGE_PATH
 const tempRoots: string[] = []
@@ -161,6 +161,8 @@ describe('vault retrieval contracts', () => {
         relPath: 'projects/nabu/roadmap.md',
         slug: 'roadmap',
         body: '# Roadmap',
+        rawMarkdown: '# Roadmap',
+        rawContentHash: hashVaultRawMarkdown('# Roadmap'),
       },
     })
 
@@ -635,6 +637,26 @@ describe('vault retrieval contracts', () => {
       expectedContentHash: hashVaultNote(currentPayload.note),
     })
     expect(stale.status).toBe(409)
+  })
+
+  it('rejects a raw Markdown update when only source formatting changed externally', async () => {
+    const root = await createVaultFixture({
+      'projects/nabu/roadmap.md': '---\ntitle: Roadmap\n---\n# Roadmap\n',
+    })
+
+    const current = await getVaultNoteByPathResponse('projects/nabu/roadmap.md')
+    const currentPayload = await current.json()
+
+    await writeFile(path.join(root, 'projects/nabu/roadmap.md'), '---\ntitle: "Roadmap"\n---\n# Roadmap\n')
+
+    const stale = await updateVaultNoteByPathResponse({
+      path: 'projects/nabu/roadmap.md',
+      rawMarkdown: '---\ntitle: Roadmap\n---\n# Roadmap\n\nEdited.\n',
+      expectedRawContentHash: currentPayload.note.rawContentHash,
+    })
+
+    expect(stale.status).toBe(409)
+    expect(await stale.json()).toEqual({ error: 'Note changed since it was read; retry with the latest rawContentHash' })
   })
 
   it('moves notes with 200, 404, 409, and 400 semantics', async () => {
