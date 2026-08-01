@@ -28,6 +28,7 @@ describe('renderAgentsMarkdown', () => {
     expect(markdown).toContain('https://nabu.timi.click/api/vault/notes/by-path?path=projects/docsyde/sales/icp-findings.md')
     expect(markdown).toContain('When writing notes, prefer canonical frontmatter metadata')
     expect(markdown).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
+    expect(markdown).toContain('expectedRawContentHash')
     expect(markdown).toContain('Folder delete is empty-only and non-recursive.')
     expect(markdown).toContain('Transport: stdio')
     expect(markdown).not.toContain('<html')
