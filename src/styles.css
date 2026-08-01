@@ -192,6 +192,11 @@ pre,
   color: var(--ink);
 }
 
+.ui-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .text-button {
   border: 0;
   padding: 0;
@@ -580,11 +585,85 @@ pre,
 }
 
 .reader-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 20px 0 0;
 }
 
 .path-button {
   color: var(--ink-muted);
+}
+
+.note-editor {
+  width: min(100%, 860px);
+  margin-top: 28px;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.editor-mode-label {
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.editor-status {
+  margin-right: auto;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.editor-status.is-error {
+  color: #ffb3b3;
+}
+
+.markdown-editor {
+  display: block;
+  width: 100%;
+  min-height: min(68vh, 760px);
+  resize: vertical;
+  border: 1px solid var(--rule);
+  border-radius: var(--rad);
+  padding: 18px;
+  background: var(--bg-sunk);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+.markdown-editor:focus {
+  border-color: var(--accent-soft);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.editor-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-left: 2px solid #d47979;
+  border-radius: 0 var(--rad) var(--rad) 0;
+  background: var(--bg-sunk);
+}
+
+.editor-error p {
+  margin: 0;
+  color: #ffb3b3;
+  font-size: 12px;
 }
 
 .note-markdown {
@@ -899,6 +978,10 @@ pre,
 
   .reader-layout {
     display: block;
+  }
+
+  .markdown-editor {
+    min-height: 60vh;
   }
 
   .details-drawer,

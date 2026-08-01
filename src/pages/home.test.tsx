@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomePage } from './home'
 
 vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({ invalidate: vi.fn().mockResolvedValue(undefined) }),
   Link: ({ children, to, search, ...props }: ComponentProps<'a'> & { to?: string; search?: unknown }) => {
     const href = typeof to === 'string' ? to : '/'
     const previousSearch = {
@@ -83,6 +84,8 @@ function buildBrowseFixture() {
         status: 'draft',
         confidence: 'high',
       },
+      rawMarkdown: '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
+      rawContentHash: 'alpha-raw-hash',
       body: '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
       outgoingLinks: [
         {
@@ -188,6 +191,7 @@ beforeEach(() => {
     value: { writeText },
   })
   writeText.mockClear()
+  vi.stubGlobal('fetch', vi.fn())
 })
 
 describe('HomePage', () => {
@@ -210,6 +214,72 @@ describe('HomePage', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy note path/i }))
 
     expect(writeText).toHaveBeenCalledWith('ideas/alpha.md')
+  })
+
+  it('enters explicit-save Markdown editing mode with the exact source', () => {
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit note/i }))
+
+    expect(screen.getByRole('textbox', { name: /markdown editor/i })).toHaveValue(
+      '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
+    )
+    expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+  })
+
+  it('saves the exact Markdown source with the raw revision and refreshes the route', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          updated: true,
+          note: {
+            ...buildBrowseFixture().note,
+            rawMarkdown: '# Alpha\n\nEdited.',
+            rawContentHash: 'edited-raw-hash',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+    fireEvent.click(screen.getByRole('button', { name: /edit note/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /markdown editor/i }), { target: { value: '# Alpha\n\nEdited.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await screen.findByRole('button', { name: /edit note/i })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/vault/notes/by-path',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          path: 'ideas/alpha.md',
+          rawMarkdown: '# Alpha\n\nEdited.',
+          expectedRawContentHash: 'alpha-raw-hash',
+        }),
+      }),
+    )
+  })
+
+  it('keeps the draft visible when the raw revision is stale', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Note changed since it was read; retry with the latest rawContentHash' }), {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+    fireEvent.click(screen.getByRole('button', { name: /edit note/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /markdown editor/i }), { target: { value: '# Alpha\n\nDraft survives.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(await screen.findByText(/changed since it was read/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /markdown editor/i })).toHaveValue('# Alpha\n\nDraft survives.')
   })
 
   it('renders internal wiki and markdown note links as app navigation links', () => {
