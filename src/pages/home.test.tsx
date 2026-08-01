@@ -266,11 +266,22 @@ describe('HomePage', () => {
 
   it('keeps the draft visible when the raw revision is stale', async () => {
     const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValue(
+    fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: 'Note changed since it was read; retry with the latest rawContentHash' }), {
         status: 409,
         headers: { 'content-type': 'application/json' },
       }),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          note: {
+            rawMarkdown: '# Alpha\n\nLatest from agent.',
+            rawContentHash: 'latest-raw-hash',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
     )
 
     render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
@@ -280,6 +291,11 @@ describe('HomePage', () => {
 
     expect(await screen.findByText(/changed since it was read/i)).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /markdown editor/i })).toHaveValue('# Alpha\n\nDraft survives.')
+
+    fireEvent.click(screen.getByRole('button', { name: /reload latest/i }))
+
+    expect(await screen.findByRole('textbox', { name: /markdown editor/i })).toHaveValue('# Alpha\n\nLatest from agent.')
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled()
   })
 
   it('renders internal wiki and markdown note links as app navigation links', () => {

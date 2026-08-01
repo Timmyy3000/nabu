@@ -344,6 +344,7 @@ export function HomePage({
   const [detailsOpenFor, setDetailsOpenFor] = useState<string | null>(null)
   const [editingNotePath, setEditingNotePath] = useState<string | null>(null)
   const [editorValue, setEditorValue] = useState('')
+  const [editorBaseValue, setEditorBaseValue] = useState('')
   const [editorRevision, setEditorRevision] = useState('')
   const [editorSaveState, setEditorSaveState] = useState<EditorSaveState>('idle')
   const [editorError, setEditorError] = useState<string | null>(null)
@@ -351,7 +352,7 @@ export function HomePage({
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
 
   const editing = browse.note ? editingNotePath === browse.note.relPath : false
-  const editorDirty = editing && browse.note ? editorValue !== browse.note.rawMarkdown : false
+  const editorDirty = editing ? editorValue !== editorBaseValue : false
 
   const exitEditing = useCallback(() => {
     if (editorDirty && !window.confirm('Discard unsaved changes?')) {
@@ -360,6 +361,7 @@ export function HomePage({
 
     setEditingNotePath(null)
     setEditorValue('')
+    setEditorBaseValue('')
     setEditorRevision('')
     setEditorSaveState('idle')
     setEditorError(null)
@@ -399,6 +401,7 @@ export function HomePage({
       await router.invalidate()
       setEditingNotePath(null)
       setEditorValue('')
+      setEditorBaseValue('')
       setEditorRevision('')
     } catch {
       setEditorSaveState('error')
@@ -423,6 +426,7 @@ export function HomePage({
       }
 
       setEditorValue(payload.note.rawMarkdown)
+      setEditorBaseValue(payload.note.rawMarkdown)
       setEditorRevision(payload.note.rawContentHash)
       setEditorSaveState('idle')
       setEditorError(null)
@@ -439,6 +443,7 @@ export function HomePage({
 
     setEditingNotePath(browse.note.relPath)
     setEditorValue(browse.note.rawMarkdown)
+    setEditorBaseValue(browse.note.rawMarkdown)
     setEditorRevision(browse.note.rawContentHash)
     setEditorSaveState('idle')
     setEditorError(null)
