@@ -1,5 +1,6 @@
 import type { ParsedVaultNote } from './parse-note'
 import type { VaultNoteLink } from './parse-note'
+import type { VaultSearchDocument } from './search'
 
 export type VaultIndexStats = {
   noteCount: number
@@ -11,6 +12,7 @@ export type VaultIndexStats = {
 
 export type VaultIndex = {
   notes: ParsedVaultNote[]
+  searchDocuments: VaultSearchDocument[]
   byRelPath: Map<string, ParsedVaultNote>
   bySlug: Map<string, ParsedVaultNote>
   slugCollisions: Map<string, string[]>

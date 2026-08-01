@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseNote, type ParsedVaultNote } from './parse-note'
-import { normalizeSearchQuery, searchVaultIndex } from './search'
+import { createVaultSearchDocument, normalizeSearchQuery, searchVaultIndex } from './search'
 
 function note(relPath: string, rawMarkdown: string): ParsedVaultNote {
   return parseNote({ relPath, rawMarkdown })
@@ -42,6 +42,23 @@ describe('normalizeSearchQuery', () => {
 })
 
 describe('searchVaultIndex', () => {
+  it('uses normalized search documents supplied by the vault index', () => {
+    const indexedNote = note('ideas/agent-memory.md', '---\ntitle: Agent Memory\n---\nShared context')
+    const unrelatedNote = note('ideas/other.md', '# Other')
+
+    const results = searchVaultIndex({
+      notes: [unrelatedNote],
+      searchDocuments: [createVaultSearchDocument(indexedNote)],
+      query: 'agent memory',
+      path: '',
+      tag: null,
+      limit: 20,
+      offset: 0,
+    })
+
+    expect(results.results.map((entry) => entry.relPath)).toEqual(['ideas/agent-memory.md'])
+  })
+
   it('ranks exact slug matches above title/body-only matches', () => {
     const results = searchVaultIndex({
       notes: [

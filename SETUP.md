@@ -25,6 +25,64 @@ KNOWLEDGE_PATH=/data/nabu/knowledge
 NABU_PASSWORD="set-a-real-password-here"
 ```
 
+## Local MCP access
+
+Nabu includes an agent-first MCP server that runs as a local stdio process. The
+process can access a directly mounted vault or proxy MCP calls to a deployed
+Nabu service. The local process owns the MCP server setup; the browser app does
+not need an MCP-specific route.
+
+### Direct vault mode
+
+Use this when the MCP client and the vault are on the same machine. The vault
+path must be absolute, outside the Nabu checkout, and already exist unless
+`NABU_MCP_CREATE_VAULT=true` is set.
+
+```json
+{
+  "mcpServers": {
+    "nabu": {
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "env": {
+        "NABU_MCP_MODE": "direct",
+        "KNOWLEDGE_PATH": "/data/nabu/knowledge"
+      }
+    }
+  }
+}
+```
+
+On Windows, use an absolute Windows path in `KNOWLEDGE_PATH` and make sure the
+MCP client launches from the Nabu checkout containing `package.json`.
+
+### Remote deployed-Nabu mode
+
+Use this when Nabu is running on a VPS or another host. Create a long random
+`NABU_AGENT_TOKEN` on the deployed service, configure the same token in the
+local MCP client, and use HTTPS for non-loopback URLs.
+
+```json
+{
+  "mcpServers": {
+    "nabu": {
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "env": {
+        "NABU_MCP_MODE": "remote",
+        "NABU_URL": "https://nabu.example.com",
+        "NABU_AGENT_TOKEN": "replace-with-a-32-plus-character-random-token"
+      }
+    }
+  }
+}
+```
+
+The first implementation exposes traversal, search, note resources, and note
+create/update/move/delete operations through stdio. A native remote `/mcp`
+endpoint with OAuth, Origin validation, and deployment-specific proxy guidance
+is intentionally a separate follow-up.
+
 ## The non-negotiables
 
 If you are the agent doing setup, do not screw these up:

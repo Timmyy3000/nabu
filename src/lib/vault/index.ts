@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
 import type { ParsedVaultNote, VaultNoteLink } from './parse-note'
+import { createVaultSearchDocument } from './search'
 import type { VaultBacklink, VaultIndex, VaultResolvedOutgoingLink } from './types'
 
 function compareStrings(left: string, right: string): number {
@@ -147,7 +148,8 @@ function resolveWikiTarget(input: {
     return null
   }
 
-  const isPathLike = target.includes('/') || target.toLowerCase().endsWith('.md')
+  const targetWithoutExtras = stripQueryAndFragment(target).trim()
+  const isPathLike = targetWithoutExtras.includes('/') || targetWithoutExtras.toLowerCase().endsWith('.md')
 
   if (isPathLike) {
     const pathMatch = resolvePathLikeTarget({ target, byRelPath: input.byRelPath })
@@ -156,7 +158,7 @@ function resolveWikiTarget(input: {
     }
   }
 
-  const normalizedSlug = normalizeWikiSlugTarget(target)
+  const normalizedSlug = normalizeWikiSlugTarget(targetWithoutExtras)
   if (normalizedSlug) {
     const slugMatches = input.slugEntries.get(normalizedSlug) ?? []
     if (slugMatches.length === 1) {
@@ -164,7 +166,7 @@ function resolveWikiTarget(input: {
     }
   }
 
-  const normalizedTitle = normalizeTitleLookup(target)
+  const normalizedTitle = normalizeTitleLookup(targetWithoutExtras)
   if (!normalizedTitle) {
     return null
   }
@@ -400,6 +402,7 @@ export function buildVaultIndex(
 
   return {
     notes,
+    searchDocuments: notes.map(createVaultSearchDocument),
     byRelPath,
     bySlug,
     slugCollisions,

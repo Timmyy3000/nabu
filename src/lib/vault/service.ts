@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
+import { hashVaultNote } from './content-hash'
 import { getVaultConfig } from './config'
 import {
   createVaultFolder as createVaultFolderOnDisk,
@@ -116,9 +117,14 @@ type VaultNoteWriteInput = {
   document?: VaultStructuredNoteDocument | null | undefined
 }
 
+type VaultNoteUpdateInput = VaultNoteWriteInput & {
+  expectedContentHash?: string | null | undefined
+}
+
 type VaultNoteMoveInput = {
   path: string | null | undefined
   toPath: string | null | undefined
+  expectedContentHash?: string | null | undefined
 }
 
 type VaultNoteCreateResult = {
@@ -159,6 +165,22 @@ type VaultSearchInput = {
 
 let cachedIndex: LoadedVaultIndex | null = null
 let inFlightBuild: Promise<LoadedVaultIndex> | null = null
+let vaultMutationQueue = Promise.resolve()
+
+async function withVaultMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = vaultMutationQueue
+  let release!: () => void
+  vaultMutationQueue = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  await previous
+  try {
+    return await operation()
+  } finally {
+    release()
+  }
+}
 
 function normalizeSlugInput(slug: string): string {
   return slug
@@ -410,6 +432,16 @@ function normalizeFolderCreatePathInput(folderPath: string | null | undefined): 
   }
 
   return normalizeVaultPath(trimmed)
+}
+
+function normalizeFolderDeletePathInput(folderPath: string | null | undefined): string {
+  const normalized = normalizeFolderPathInput(folderPath)
+
+  if (!normalized) {
+    throw new Error('Folder path is required')
+  }
+
+  return normalized
 }
 
 function normalizeMarkdownNotePathInput(notePath: string | null | undefined): string {
@@ -721,159 +753,190 @@ async function readNoteFromRebuiltIndex(relPath: string): Promise<{ index: Loade
   }
 }
 
-export async function createVaultFolder(folderPathInput: string): Promise<VaultFolderCreateResult> {
-  const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
-  const { rootPath } = await getVaultConfig()
-  const created = await createVaultFolderOnDisk(rootPath, normalizedPath)
-  const index = await rebuildVaultIndex()
-
-  return {
-    path: normalizedPath,
-    created,
-    builtAt: index.builtAt,
+async function assertExpectedContentHash(relPath: string, expectedContentHash: string | null | undefined): Promise<void> {
+  if (!expectedContentHash) {
+    return
   }
+
+  const index = await rebuildVaultIndex()
+  const parsed = index.byRelPath.get(relPath)
+  if (!parsed) {
+    throw new Error(`Note not found: ${relPath}`)
+  }
+
+  const currentNote = toVaultNotePayload(parsed, getNoteBacklinks(index, relPath))
+  if (hashVaultNote(currentNote) !== expectedContentHash) {
+    throw new Error('Note changed since it was read; retry with the latest contentHash')
+  }
+}
+
+export async function createVaultFolder(folderPathInput: string): Promise<VaultFolderCreateResult> {
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
+    const { rootPath } = await getVaultConfig()
+    const created = await createVaultFolderOnDisk(rootPath, normalizedPath)
+    const index = await rebuildVaultIndex()
+
+    return {
+      path: normalizedPath,
+      created,
+      builtAt: index.builtAt,
+    }
+  })
 }
 
 export async function createVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteCreateResult> {
-  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
-  const { rootPath } = await getVaultConfig()
-  const now = currentIsoTimestamp()
-  const rawMarkdown = input.document
-    ? materializeNoteMarkdown(input, {
-        createdAt: now,
-        updatedAt: now,
-      })
-    : materializeNoteMarkdown(input)
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+    const { rootPath } = await getVaultConfig()
+    const now = currentIsoTimestamp()
+    const rawMarkdown = input.document
+      ? materializeNoteMarkdown(input, {
+          createdAt: now,
+          updatedAt: now,
+        })
+      : materializeNoteMarkdown(input)
 
-  try {
-    await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
-  } catch (error) {
-    if (error instanceof VaultFileAlreadyExistsError) {
-      throw new Error(`Note already exists: ${normalizedPath}`)
+    try {
+      await createVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+    } catch (error) {
+      if (error instanceof VaultFileAlreadyExistsError) {
+        throw new Error(`Note already exists: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    throw error
-  }
+    const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
 
-  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
-
-  return {
-    builtAt: index.builtAt,
-    created: true,
-    note,
-  }
+    return {
+      builtAt: index.builtAt,
+      created: true,
+      note,
+    }
+  })
 }
 
-export async function updateVaultNote(input: VaultNoteWriteInput): Promise<VaultNoteUpdateResult> {
-  const normalizedPath = normalizeMarkdownNotePathInput(input.path)
-  const { rootPath } = await getVaultConfig()
-  const now = currentIsoTimestamp()
-  const rawMarkdown = input.document
-    ? materializeNoteMarkdown(input, {
-        createdAt: (await getExistingNoteCreatedAt(rootPath, normalizedPath)) ?? now,
-        updatedAt: now,
-      })
-    : materializeNoteMarkdown(input)
+export async function updateVaultNote(input: VaultNoteUpdateInput): Promise<VaultNoteUpdateResult> {
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeMarkdownNotePathInput(input.path)
+    const { rootPath } = await getVaultConfig()
+    await assertExpectedContentHash(normalizedPath, input.expectedContentHash)
+    const now = currentIsoTimestamp()
+    const rawMarkdown = input.document
+      ? materializeNoteMarkdown(input, {
+          createdAt: (await getExistingNoteCreatedAt(rootPath, normalizedPath)) ?? now,
+          updatedAt: now,
+        })
+      : materializeNoteMarkdown(input)
 
-  try {
-    await updateVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
-  } catch (error) {
-    if (error instanceof VaultFileNotFoundError) {
-      throw new Error(`Note not found: ${normalizedPath}`)
+    try {
+      await updateVaultMarkdownFile(rootPath, normalizedPath, rawMarkdown)
+    } catch (error) {
+      if (error instanceof VaultFileNotFoundError) {
+        throw new Error(`Note not found: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    throw error
-  }
+    const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
 
-  const { index, note } = await readNoteFromRebuiltIndex(normalizedPath)
-
-  return {
-    builtAt: index.builtAt,
-    updated: true,
-    note,
-  }
+    return {
+      builtAt: index.builtAt,
+      updated: true,
+      note,
+    }
+  })
 }
 
 export async function moveVaultNote(input: VaultNoteMoveInput): Promise<VaultNoteMoveResult> {
-  const fromPath = normalizeMarkdownNotePathInput(input.path)
-  const toPath = normalizeMarkdownNotePathInput(input.toPath)
-  const { rootPath } = await getVaultConfig()
+  return withVaultMutation(async () => {
+    const fromPath = normalizeMarkdownNotePathInput(input.path)
+    const toPath = normalizeMarkdownNotePathInput(input.toPath)
+    const { rootPath } = await getVaultConfig()
+    await assertExpectedContentHash(fromPath, input.expectedContentHash)
 
-  try {
-    await moveVaultMarkdownFile(rootPath, fromPath, toPath)
-  } catch (error) {
-    if (error instanceof VaultFileNotFoundError) {
-      throw new Error(`Note not found: ${fromPath}`)
+    try {
+      await moveVaultMarkdownFile(rootPath, fromPath, toPath)
+    } catch (error) {
+      if (error instanceof VaultFileNotFoundError) {
+        throw new Error(`Note not found: ${fromPath}`)
+      }
+
+      if (error instanceof VaultPathConflictError) {
+        throw new Error(`Destination already exists: ${toPath}`)
+      }
+
+      throw error
     }
 
-    if (error instanceof VaultPathConflictError) {
-      throw new Error(`Destination already exists: ${toPath}`)
+    const { index, note } = await readNoteFromRebuiltIndex(toPath)
+
+    return {
+      builtAt: index.builtAt,
+      moved: true,
+      fromPath,
+      toPath,
+      note,
     }
-
-    throw error
-  }
-
-  const { index, note } = await readNoteFromRebuiltIndex(toPath)
-
-  return {
-    builtAt: index.builtAt,
-    moved: true,
-    fromPath,
-    toPath,
-    note,
-  }
+  })
 }
 
 export async function deleteVaultNote(pathInput: string | null | undefined): Promise<VaultNoteDeleteResult> {
-  const normalizedPath = normalizeMarkdownNotePathInput(pathInput)
-  const { rootPath } = await getVaultConfig()
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeMarkdownNotePathInput(pathInput)
+    const { rootPath } = await getVaultConfig()
 
-  try {
-    await deleteVaultMarkdownFile(rootPath, normalizedPath)
-  } catch (error) {
-    if (error instanceof VaultFileNotFoundError) {
-      throw new Error(`Note not found: ${normalizedPath}`)
+    try {
+      await deleteVaultMarkdownFile(rootPath, normalizedPath)
+    } catch (error) {
+      if (error instanceof VaultFileNotFoundError) {
+        throw new Error(`Note not found: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    throw error
-  }
+    const index = await rebuildVaultIndex()
 
-  const index = await rebuildVaultIndex()
-
-  return {
-    builtAt: index.builtAt,
-    deleted: true,
-    note: {
-      relPath: normalizedPath,
-    },
-  }
+    return {
+      builtAt: index.builtAt,
+      deleted: true,
+      note: {
+        relPath: normalizedPath,
+      },
+    }
+  })
 }
 
 export async function deleteVaultFolder(folderPathInput: string | null | undefined): Promise<VaultFolderDeleteResult> {
-  const normalizedPath = normalizeFolderPathInput(folderPathInput)
-  const { rootPath } = await getVaultConfig()
+  return withVaultMutation(async () => {
+    const normalizedPath = normalizeFolderDeletePathInput(folderPathInput)
+    const { rootPath } = await getVaultConfig()
 
-  try {
-    await deleteVaultFolderOnDisk(rootPath, normalizedPath)
-  } catch (error) {
-    if (error instanceof VaultFolderNotFoundError) {
-      throw new Error(`Folder not found: ${normalizedPath}`)
+    try {
+      await deleteVaultFolderOnDisk(rootPath, normalizedPath)
+    } catch (error) {
+      if (error instanceof VaultFolderNotFoundError) {
+        throw new Error(`Folder not found: ${normalizedPath}`)
+      }
+
+      if (error instanceof VaultFolderNotEmptyError) {
+        throw new Error(`Folder not empty: ${normalizedPath}`)
+      }
+
+      throw error
     }
 
-    if (error instanceof VaultFolderNotEmptyError) {
-      throw new Error(`Folder not empty: ${normalizedPath}`)
+    const index = await rebuildVaultIndex()
+
+    return {
+      builtAt: index.builtAt,
+      deleted: true,
+      path: normalizedPath,
     }
-
-    throw error
-  }
-
-  const index = await rebuildVaultIndex()
-
-  return {
-    builtAt: index.builtAt,
-    deleted: true,
-    path: normalizedPath,
-  }
+  })
 }
 
 function normalizeSearchPath(pathInput: string | null | undefined): string {
@@ -904,6 +967,7 @@ export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSe
 
   return searchVaultIndex({
     notes: index.notes,
+    searchDocuments: index.searchDocuments,
     query: queryData.query,
     path: normalizedPath,
     tag: normalizedTag,
@@ -1171,7 +1235,7 @@ export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promi
   }
 }
 
-export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput): Promise<Response> {
+export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput): Promise<Response> {
   try {
     const updated = await updateVaultNote(input)
     return Response.json(updated)
@@ -1194,6 +1258,10 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteWriteInput):
         },
         { status: 404 },
       )
+    }
+
+    if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest contentHash') {
+      return Response.json({ error: error.message }, { status: 409 })
     }
 
     return Response.json(
@@ -1231,6 +1299,10 @@ export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Pr
         },
         { status: 409 },
       )
+    }
+
+    if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest contentHash') {
+      return Response.json({ error: error.message }, { status: 409 })
     }
 
     return Response.json(

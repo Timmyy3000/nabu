@@ -182,6 +182,66 @@ describe('buildVaultIndex', () => {
     ])
   })
 
+  it('normalizes wiki fragments and query suffixes and resolves extensionless markdown links', () => {
+    const notes = [
+      note(
+        'ideas/source.md',
+        [
+          '[[projects/roadmap#goals|Goals]]',
+          '[[Product Vision?view=compact]]',
+          '[Roadmap](../projects/roadmap#goals)',
+        ].join('\n'),
+      ),
+      note('projects/roadmap.md', '---\nslug: roadmap\n---\n# Roadmap'),
+      note('projects/vision.md', '---\ntitle: Product Vision\n---\n# Vision'),
+    ]
+
+    const index = buildVaultIndex(notes)
+    const source = index.byRelPath.get('ideas/source.md')
+
+    expect(source?.outgoingLinks).toMatchObject([
+      {
+        raw: '[[projects/roadmap#goals|Goals]]',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+      {
+        raw: '[[Product Vision?view=compact]]',
+        resolved: true,
+        targetRelPath: 'projects/vision.md',
+        targetSlug: 'vision',
+      },
+      {
+        raw: '[Roadmap](../projects/roadmap#goals)',
+        kind: 'markdown',
+        resolved: true,
+        targetRelPath: 'projects/roadmap.md',
+        targetSlug: 'roadmap',
+      },
+    ])
+  })
+
+  it('builds reusable normalized search documents with the vault index', () => {
+    const index = buildVaultIndex([
+      note('ideas/agent-memory.md', '---\ntitle: Agent Memory\ntags: [AI]\n---\nShared body'),
+    ])
+
+    expect(index.searchDocuments).toMatchObject([
+      {
+        normalizedSlug: 'agent memory',
+        normalizedTitle: 'agent memory',
+        normalizedSummary: '',
+        normalizedBody: 'shared body',
+        normalizedTags: ['ai'],
+        note: {
+          id: 'ideas/agent-memory.md',
+          relPath: 'ideas/agent-memory.md',
+        },
+      },
+    ])
+  })
+
   it('keeps ambiguous wiki title matches unresolved', () => {
     const notes = [
       note('ideas/source.md', '[[Shared Title]]'),

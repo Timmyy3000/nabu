@@ -15,6 +15,13 @@ export type AgentBootstrapContract = {
     convenienceRead: '/api/vault/notes/$slug'
     note: string
   }
+  mcp: {
+    localCommand: 'npm run mcp'
+    directEnvironment: ['NABU_MCP_MODE=direct', 'KNOWLEDGE_PATH=<absolute-vault-path>']
+    remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_AGENT_TOKEN=<32-plus-character-token>']
+    transport: 'stdio'
+    nativeRemoteEndpoint: 'separate follow-up'
+  }
 }
 
 export function getAgentBootstrapContract(): AgentBootstrapContract {
@@ -32,6 +39,13 @@ export function getAgentBootstrapContract(): AgentBootstrapContract {
       deterministicRead: '/api/vault/notes/by-path?path=',
       convenienceRead: '/api/vault/notes/$slug',
       note: 'Use relPath as the canonical note identity. Slug lookup is convenience-only and may collide.',
+    },
+    mcp: {
+      localCommand: 'npm run mcp',
+      directEnvironment: ['NABU_MCP_MODE=direct', 'KNOWLEDGE_PATH=<absolute-vault-path>'],
+      remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_AGENT_TOKEN=<32-plus-character-token>'],
+      transport: 'stdio',
+      nativeRemoteEndpoint: 'separate follow-up',
     },
   }
 }

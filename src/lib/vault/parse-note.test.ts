@@ -180,6 +180,29 @@ title: [broken
     ])
   })
 
+  it('extracts extensionless internal markdown links without treating assets as notes', () => {
+    const note = parseNote({
+      relPath: 'ideas/agent-memory.md',
+      rawMarkdown: '[Roadmap](../projects/roadmap#focus)\n[Image](../assets/image.png)\n[Local](./local-note)\n[Query](?view=print)\n[Folder](./)',
+    })
+
+    expect(note.outgoingLinks).toMatchObject([
+      {
+        raw: '[Roadmap](../projects/roadmap#focus)',
+        kind: 'markdown',
+        target: '../projects/roadmap#focus',
+      },
+      {
+        raw: '[Local](./local-note)',
+        kind: 'markdown',
+        target: './local-note',
+      },
+    ])
+    expect(note.outgoingLinks.some((link) => link.raw.includes('image.png'))).toBe(false)
+    expect(note.outgoingLinks.some((link) => link.raw.includes('?view=print'))).toBe(false)
+    expect(note.outgoingLinks.some((link) => link.raw.includes('(./)'))).toBe(false)
+  })
+
   it('preserves duplicate links and ignores malformed empty wiki-links', () => {
     const note = parseNote({
       relPath: 'ideas/dupes.md',

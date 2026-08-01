@@ -67,20 +67,21 @@ export const Route = createFileRoute('/')({
   }),
   loader: async ({ deps }) => {
     await reportUsage()
-    const browse = await loadVaultBrowse({
-      data: {
-        folder: deps.folder,
-        note: deps.note,
-      },
-    })
-
-    const search = await loadVaultSearch({
-      data: {
-        q: deps.q,
-        searchPath: deps.searchPath,
-        searchTag: deps.searchTag,
-      },
-    })
+    const [browse, search] = await Promise.all([
+      loadVaultBrowse({
+        data: {
+          folder: deps.folder,
+          note: deps.note,
+        },
+      }),
+      loadVaultSearch({
+        data: {
+          q: deps.q,
+          searchPath: deps.searchPath,
+          searchTag: deps.searchTag,
+        },
+      }),
+    ])
 
     return {
       browse,
