@@ -213,6 +213,40 @@ describe('HomePage', () => {
     expect(container.querySelector('.vault-reader')).toBeTruthy()
   })
 
+  it('preserves flat and nested ordered and unordered list structure in the reading view', () => {
+    const browse = buildBrowseFixture()
+    const markdown = `## Ordered list
+
+1. First item
+2. Second item
+   - Nested bullet
+   - Nested bullet
+3. Third item
+
+## Unordered list
+
+- First item
+- Second item
+  1. Nested ordered item
+     - Deep bullet
+- Third item`
+    browse.note.body = markdown
+    browse.note.rawMarkdown = markdown
+
+    const { container } = render(<HomePage browse={browse} search={null} searchPathInput="" searchTagInput="" />)
+    const noteMarkdown = container.querySelector('.note-markdown')
+    const topLevelLists = Array.from(noteMarkdown?.children ?? []).filter((child) => child.tagName === 'OL' || child.tagName === 'UL')
+
+    expect(topLevelLists.map((list) => list.tagName)).toEqual(['OL', 'UL'])
+
+    const [ordered, unordered] = topLevelLists
+    expect(ordered.children).toHaveLength(3)
+    expect(unordered.children).toHaveLength(3)
+    expect(ordered.querySelector('li:nth-child(2) > ul')?.children).toHaveLength(2)
+    expect(unordered.querySelector('li:nth-child(2) > ol')?.children).toHaveLength(1)
+    expect(unordered.querySelector('li:nth-child(2) > ol li > ul')).toHaveTextContent('Deep bullet')
+  })
+
   it('copies the canonical note path when the path label is clicked', () => {
     render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
