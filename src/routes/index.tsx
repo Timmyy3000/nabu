@@ -13,23 +13,31 @@ const getAuthStatus = createServerFn({ method: 'GET' }).handler(async ({ request
 const loadVaultBrowse = createServerFn({ method: 'GET' })
   .inputValidator((input: { folder: string; note: string }) => input)
   .handler(async ({ request, data }) => {
-    const { requireVaultPrincipal } = await import('../lib/auth/authorization')
+    const { requireVaultPrincipal, toVaultAuthorizationResponse } = await import('../lib/auth/authorization')
     const auth = await requireVaultPrincipal(request)
     if (auth.response) {
       throw redirect({ to: '/login' })
     }
 
-    return getVaultBrowseData({
-      folderPath: data.folder,
-      noteSlug: data.note,
-      principal: auth.principal ?? undefined,
-    })
+    try {
+      return await getVaultBrowseData({
+        folderPath: data.folder,
+        noteSlug: data.note,
+        principal: auth.principal ?? undefined,
+      })
+    } catch (error) {
+      const response = toVaultAuthorizationResponse(error)
+      if (response) {
+        throw response
+      }
+      throw error
+    }
   })
 
 const loadVaultSearch = createServerFn({ method: 'GET' })
   .inputValidator((input: { q: string; searchPath: string; searchTag: string }) => input)
   .handler(async ({ request, data }) => {
-    const { requireVaultPrincipal } = await import('../lib/auth/authorization')
+    const { requireVaultPrincipal, toVaultAuthorizationResponse } = await import('../lib/auth/authorization')
     const auth = await requireVaultPrincipal(request)
     if (auth.response) {
       throw redirect({ to: '/login' })
@@ -39,12 +47,20 @@ const loadVaultSearch = createServerFn({ method: 'GET' })
       return null
     }
 
-    return searchVaultNotes({
-      query: data.q,
-      path: data.searchPath,
-      tag: data.searchTag,
-      principal: auth.principal ?? undefined,
-    })
+    try {
+      return await searchVaultNotes({
+        query: data.q,
+        path: data.searchPath,
+        tag: data.searchTag,
+        principal: auth.principal ?? undefined,
+      })
+    } catch (error) {
+      const response = toVaultAuthorizationResponse(error)
+      if (response) {
+        throw response
+      }
+      throw error
+    }
   })
 
 export const Route = createFileRoute('/')({

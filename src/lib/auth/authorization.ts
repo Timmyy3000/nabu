@@ -41,6 +41,14 @@ export class VaultAuthorizationError extends Error {
   }
 }
 
+export function toVaultAuthorizationResponse(error: unknown): Response | null {
+  if (!(error instanceof VaultAuthorizationError)) {
+    return null
+  }
+
+  return Response.json({ error: error.message }, { status: error.status })
+}
+
 function extractBearerToken(request: Request): string | null {
   const value = request.headers.get('authorization')
   const match = value ? /^Bearer\s+(.+)$/i.exec(value.trim()) : null

@@ -2,7 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { OWNER_VAULT_PRINCIPAL, assertVaultPathAccess, isVaultPathInScope, resolveVaultPrincipal } from './authorization'
+import {
+  OWNER_VAULT_PRINCIPAL,
+  VaultAuthorizationError,
+  assertVaultPathAccess,
+  isVaultPathInScope,
+  resolveVaultPrincipal,
+  toVaultAuthorizationResponse,
+} from './authorization'
 import { hashSecret } from '../shared-spaces/crypto'
 import { SharedSpaceService, __resetSharedSpaceServiceForTests } from '../shared-spaces/service'
 
@@ -64,5 +71,13 @@ describe('vault authorization', () => {
     expect(isVaultPathInScope(principal!, 'private.md')).toBe(false)
     expect(() => assertVaultPathAccess(principal!, 'private.md')).toThrow()
     expect((await service.getAccessTokenForTest(hashSecret(redeemed.accessToken)))?.lastUsedAt).toBe(1_000)
+  })
+
+  it('converts scoped authorization failures into safe HTTP responses', async () => {
+    const response = toVaultAuthorizationResponse(new VaultAuthorizationError('The requested vault resource is not available.'))
+
+    expect(response?.status).toBe(404)
+    expect(await response?.json()).toEqual({ error: 'The requested vault resource is not available.' })
+    expect(toVaultAuthorizationResponse(new Error('unrelated failure'))).toBeNull()
   })
 })
