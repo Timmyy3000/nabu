@@ -9,20 +9,20 @@ export const Route = createFileRoute('/api/vault/folders')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
+        const { requireVaultPrincipal } = await import('../../../lib/auth/authorization')
+        const auth = await requireVaultPrincipal(request)
+        if (auth.response) {
+          return auth.response
         }
 
         const url = new URL(request.url)
-        return getVaultFolderListingResponse(url.searchParams.get('path'))
+        return getVaultFolderListingResponse(url.searchParams.get('path'), auth.principal ?? undefined)
       },
       POST: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
+        const { requireVaultPrincipal } = await import('../../../lib/auth/authorization')
+        const auth = await requireVaultPrincipal(request)
+        if (auth.response) {
+          return auth.response
         }
 
         let body: unknown
@@ -39,17 +39,17 @@ export const Route = createFileRoute('/api/vault/folders')({
         }
 
         const payload = body as { path?: string | null }
-        return createVaultFolderResponse({ path: payload.path ?? null })
+        return createVaultFolderResponse({ path: payload.path ?? null, principal: auth.principal ?? undefined })
       },
       DELETE: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
+        const { requireVaultPrincipal } = await import('../../../lib/auth/authorization')
+        const auth = await requireVaultPrincipal(request)
+        if (auth.response) {
+          return auth.response
         }
 
         const url = new URL(request.url)
-        return deleteVaultFolderResponse({ path: url.searchParams.get('path') })
+        return deleteVaultFolderResponse({ path: url.searchParams.get('path'), principal: auth.principal ?? undefined })
       },
     },
   },

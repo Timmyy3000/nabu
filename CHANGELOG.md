@@ -2,6 +2,16 @@
 
 All notable changes to Nabu will be documented in this file.
 
+## Unreleased
+
+### Agent-first temporary shared spaces
+
+- Added durable, time-limited shared-space leases over live recursive vault-folder boundaries
+- Added agent-facing proposal, confirmation, listing, revocation, extension, invite creation, and one-time redemption operations over HTTP and MCP
+- Added scoped bearer access tokens with hashed-at-rest secrets and synchronous expiry/revocation enforcement
+- Applied shared-space filtering to vault trees, folders, notes, search, backlinks, neighborhoods, and mutations
+- Added note revisions and ETags with strict shared-token writes, structured `428`/`409` responses, and a backwards-compatible owner migration warning
+- Documented the read → merge → retry workflow and temporary shared-space security model
 ## [0.6.1] - 2026-08-01
 
 Search transition fix release.

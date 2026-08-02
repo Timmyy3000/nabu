@@ -25,6 +25,16 @@ KNOWLEDGE_PATH=/data/nabu/knowledge
 NABU_PASSWORD="set-a-real-password-here"
 ```
 
+Optional shared-space metadata is stored durably outside the Markdown vault:
+
+```bash
+NABU_DATA_PATH=/data/nabu/app-data
+```
+
+Keep this directory on persistent storage. It contains lease metadata and
+token hashes, never raw invite or access-token secrets. Existing password
+sessions and `NABU_AGENT_TOKEN` clients remain valid without an auth migration.
+
 ## Local MCP access
 
 Nabu includes an agent-first MCP server that runs as a local stdio process. The

@@ -5,10 +5,10 @@ export const Route = createFileRoute('/api/vault/notes/')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
+        const { requireVaultPrincipal } = await import('../../../../lib/auth/authorization')
+        const auth = await requireVaultPrincipal(request)
+        if (auth.response) {
+          return auth.response
         }
 
         let body: unknown
@@ -54,6 +54,7 @@ export const Route = createFileRoute('/api/vault/notes/')({
           path: payload.path ?? null,
           rawMarkdown: payload.rawMarkdown ?? null,
           document: payload.document ?? null,
+          principal: auth.principal ?? undefined,
         })
       },
     },

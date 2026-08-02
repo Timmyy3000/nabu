@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type { SharedSpacePermission } from '../shared-spaces/types'
 import type { VaultStructuredNoteDocument } from '../vault/write-note'
 import { hashVaultNote } from '../vault/content-hash'
 
@@ -7,12 +8,26 @@ export type NoteWriteInput = {
   rawMarkdown?: string
   document?: Record<string, unknown>
   expectedContentHash?: string
+  expectedRevision?: string
 }
 
 export type NoteMoveInput = {
   path: string
   toPath: string
   expectedContentHash?: string
+  expectedRevision?: string
+}
+
+export type SharedSpaceProposalInput = {
+  path: string
+  durationDays?: number
+}
+
+export type SharedSpaceConfirmationInput = {
+  proposalId: string
+  confirmed: boolean
+  durationDays?: number
+  permissions?: SharedSpacePermission[]
 }
 
 export type KnowledgeGateway = {
@@ -25,6 +40,14 @@ export type KnowledgeGateway = {
   updateNote: (input: NoteWriteInput) => Promise<unknown>
   moveNote: (input: NoteMoveInput) => Promise<unknown>
   deleteNote: (path: string) => Promise<unknown>
+  proposeSharedSpace: (input: SharedSpaceProposalInput) => Promise<unknown>
+  confirmSharedSpace: (input: SharedSpaceConfirmationInput) => Promise<unknown>
+  listSharedSpaces: () => Promise<unknown>
+  getSharedSpace: (sharedSpaceId: string) => Promise<unknown>
+  revokeSharedSpace: (sharedSpaceId: string) => Promise<unknown>
+  redeemSharedSpaceInvite: (inviteUrl: string) => Promise<unknown>
+  createSharedSpaceInvite: (sharedSpaceId: string) => Promise<unknown>
+  extendSharedSpace: (input: { sharedSpaceId: string; durationDays: number; confirmed: boolean }) => Promise<unknown>
 }
 
 export const MCP_MAX_NOTE_BYTES = 1_000_000
@@ -219,6 +242,7 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
     return {
       ...toVaultWriteInput(input),
       expectedContentHash: input.expectedContentHash ?? null,
+      expectedRevision: input.expectedRevision ?? null,
     }
   }
 
@@ -292,6 +316,38 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
       const { deleteVaultNote } = await import('../vault/service')
       return deleteVaultNote(notePath)
     },
+    async proposeSharedSpace(input) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().proposeSharedSpace({ ownerPrincipalId: 'owner', ...input })
+    },
+    async confirmSharedSpace(input) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().confirmSharedSpace({ ownerPrincipalId: 'owner', ...input })
+    },
+    async listSharedSpaces() {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().listSharedSpaces({ ownerPrincipalId: 'owner' })
+    },
+    async getSharedSpace(sharedSpaceId) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().getSharedSpace({ ownerPrincipalId: 'owner', sharedSpaceId })
+    },
+    async revokeSharedSpace(sharedSpaceId) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().revokeSharedSpace({ ownerPrincipalId: 'owner', sharedSpaceId })
+    },
+    async redeemSharedSpaceInvite(inviteUrl) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().redeemSharedSpaceInvite({ inviteUrl })
+    },
+    async createSharedSpaceInvite(sharedSpaceId) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().createSharedSpaceInvite({ ownerPrincipalId: 'owner', sharedSpaceId })
+    },
+    async extendSharedSpace(input) {
+      const { SharedSpaceService } = await import('../shared-spaces/service')
+      return new SharedSpaceService().extendSharedSpace({ ownerPrincipalId: 'owner', ...input })
+    },
   }
 }
 
@@ -316,6 +372,13 @@ function errorMessage(payload: unknown, status: number): string {
   return `Nabu API request failed with status ${status}`
 }
 
+class NabuApiError extends Error {
+  constructor(public readonly payload: unknown, public readonly status: number) {
+    super(errorMessage(payload, status))
+    this.name = 'NabuApiError'
+  }
+}
+
 export function createRemoteKnowledgeGateway(config: { baseUrl: URL; token: string; fetchFn?: typeof fetch }): KnowledgeGateway {
   const fetchFn = config.fetchFn ?? fetch
 
@@ -334,7 +397,7 @@ export function createRemoteKnowledgeGateway(config: { baseUrl: URL; token: stri
     const payload = await readJsonResponse(response)
 
     if (!response.ok) {
-      throw new Error(errorMessage(payload, response.status))
+      throw new NabuApiError(payload, response.status)
     }
 
     return payload
@@ -363,6 +426,14 @@ export function createRemoteKnowledgeGateway(config: { baseUrl: URL; token: stri
       return addContentHash(await request('/api/vault/notes/by-path', { method: 'PATCH', body: JSON.stringify(input) }))
     },
     deleteNote: (notePath) => request(`/api/vault/notes/by-path?path=${encodeURIComponent(notePath)}`, { method: 'DELETE' }),
+    proposeSharedSpace: (input) => request('/api/shared-spaces/proposals', { method: 'POST', body: JSON.stringify(input) }),
+    confirmSharedSpace: (input) => request('/api/shared-spaces/', { method: 'POST', body: JSON.stringify(input) }),
+    listSharedSpaces: () => request('/api/shared-spaces/'),
+    getSharedSpace: (sharedSpaceId) => request(`/api/shared-spaces/${encodeURIComponent(sharedSpaceId)}`),
+    revokeSharedSpace: (sharedSpaceId) => request(`/api/shared-spaces/${encodeURIComponent(sharedSpaceId)}/revoke`, { method: 'POST' }),
+    redeemSharedSpaceInvite: (inviteUrl) => request('/api/shared-spaces/invites/redeem', { method: 'POST', body: JSON.stringify({ inviteUrl }) }),
+    createSharedSpaceInvite: (sharedSpaceId) => request(`/api/shared-spaces/${encodeURIComponent(sharedSpaceId)}/invites`, { method: 'POST' }),
+    extendSharedSpace: (input) => request(`/api/shared-spaces/${encodeURIComponent(input.sharedSpaceId)}/extend`, { method: 'POST', body: JSON.stringify(input) }),
   }
 }
 

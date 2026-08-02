@@ -5,8 +5,8 @@ export const Route = createFileRoute('/agents.md')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const { isAuthenticatedRequest } = await import('../lib/auth/session')
-        const body = renderAgentsMarkdown(isAuthenticatedRequest(request), new URL(request.url).origin)
+        const { resolveVaultPrincipal } = await import('../lib/auth/authorization')
+        const body = renderAgentsMarkdown(Boolean(await resolveVaultPrincipal(request)), new URL(request.url).origin)
         return new Response(body, {
           status: 200,
           headers: {

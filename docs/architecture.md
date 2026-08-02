@@ -43,10 +43,51 @@ The knowledge bank should stay private unless intentionally shared.
 - `POST /api/vault/notes` → create markdown notes
 - `PUT /api/vault/notes/by-path` → update markdown notes by canonical path; human source saves can include `expectedRawContentHash` to reject stale raw-file edits
 
+## Temporary shared spaces
+
+Shared spaces are durable server-side leases over a non-root vault folder. They
+are live recursive path boundaries, not snapshots: existing descendants are
+visible, and files or folders created later below the shared root become
+visible automatically. Parent folders, siblings, prefix-collision paths, and
+symlink targets remain outside the scope.
+
+The agent-facing lifecycle is:
+
+1. `POST /api/shared-spaces/proposals` recursively previews the exact current
+   files and folders and has no sharing side effect.
+2. `POST /api/shared-spaces/` requires `{ "confirmed": true }` and creates a
+   1-hour, one-time invite.
+3. `POST /api/shared-spaces/invites/redeem` atomically exchanges the invite for
+   a scoped bearer access token.
+4. `POST /api/shared-spaces/:id/revoke` or lease expiry invalidates all access
+   synchronously; cleanup is optional and asynchronous.
+
+Shared-space metadata lives in durable server-side SQLite at
+`NABU_DATA_PATH/shared-spaces.sqlite` (default `.nabu-data`), outside the
+Markdown vault. Only SHA-256 hashes of invite and access-token secrets are
+stored. Raw secrets are returned only at creation/redemption time.
+
+The owner/password and existing `NABU_AGENT_TOKEN` authentication contract is
+backwards compatible. Shared bearer tokens resolve to a scoped principal, and
+the same authorization service is applied before every vault read, search,
+graph/link projection, listing, and mutation.
+
+## Revision-aware writes
+
+Note reads return a raw-Markdown SHA-256 `note.revision` and a matching ETag.
+Updates and moves accept that value through `If-Match: "<revision>"` or the
+`expectedRevision` body field. Shared-token writes require it immediately.
+Existing owner agents may continue sending legacy writes during the migration
+period; successful legacy writes include a machine-readable migration warning.
+When strict owner mode is enabled, missing revisions return `428
+WRITE_REVISION_REQUIRED`, and stale revisions return `409
+STALE_NOTE_REVISION`. Agents should re-read, merge, and retry rather than
+silently overwriting concurrent changes.
+
 ## Long-term ideas
 
 - graph visualization
 - wiki-style internal links
 - note editing with git-backed history
 - multi-vault support
-- per-agent scoped access
+- per-agent scoped access beyond temporary shared-space leases

@@ -19,6 +19,14 @@ function createFakeGateway(): KnowledgeGateway {
     updateNote: async (input) => ({ updated: true, path: input.path }),
     moveNote: async (input) => ({ moved: true, fromPath: input.path, toPath: input.toPath }),
     deleteNote: async (notePath) => ({ deleted: true, path: notePath }),
+    proposeSharedSpace: async (input) => ({ proposalId: 'proposal_1', ...input }),
+    confirmSharedSpace: async (input) => ({ sharedSpaceId: 'space_1', ...input }),
+    listSharedSpaces: async () => ({ spaces: [] }),
+    getSharedSpace: async (sharedSpaceId) => ({ sharedSpaceId }),
+    revokeSharedSpace: async (sharedSpaceId) => ({ sharedSpaceId, revoked: true }),
+    redeemSharedSpaceInvite: async (inviteUrl) => ({ inviteUrl, accessToken: 'secret' }),
+    createSharedSpaceInvite: async (sharedSpaceId) => ({ sharedSpaceId, inviteUrl: 'invite' }),
+    extendSharedSpace: async (input) => ({ ...input, extended: true }),
   }
 }
 
@@ -60,6 +68,14 @@ describe('Nabu MCP server', () => {
       'update_note',
       'move_note',
       'delete_note',
+      'propose_shared_space',
+      'confirm_shared_space',
+      'list_shared_spaces',
+      'get_shared_space',
+      'revoke_shared_space',
+      'redeem_shared_space_invite',
+      'create_shared_space_invite',
+      'extend_shared_space',
     ])
 
     const result = await pair.client.callTool({ name: 'search_notes', arguments: { query: 'agent' } })
