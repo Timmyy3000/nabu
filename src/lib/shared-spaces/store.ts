@@ -124,7 +124,7 @@ function mapAccessToken(row: SqlRow): SharedSpaceAccessTokenRecord {
     permissions: asPermissions(row.permissions_json),
     createdAt: asNumber(row.created_at),
     expiresAt: asNumber(row.expires_at),
-    revokedAt: asNullableNumber(row.access_revoked_at),
+    revokedAt: asNullableNumber(row.revoked_at),
     lastUsedAt: asNullableNumber(row.last_used_at),
     rootPath: asString(row.root_path),
     sharedSpaceExpiresAt: asNumber(row.space_expires_at),
