@@ -13,7 +13,6 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
   const loginUrl = withBaseUrl(baseUrl, '/api/auth/login')
   const proposalUrl = withBaseUrl(baseUrl, '/api/shared-spaces/proposals')
   const sharedSpacesUrl = withBaseUrl(baseUrl, '/api/shared-spaces/')
-  const redeemUrl = withBaseUrl(baseUrl, '/api/shared-spaces/invites/redeem')
   const notesUrl = withBaseUrl(baseUrl, '/api/vault/notes')
   const notesByPathUrl = withBaseUrl(baseUrl, '/api/vault/notes/by-path')
 
@@ -118,7 +117,7 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     'Shared spaces are temporary, live recursive knowledge boundaries. Existing descendants are accessible immediately, and files or folders created later under the shared root become accessible automatically until the lease expires or is revoked.',
     '',
     '- Do not share the vault root.',
-    '- Shared roots are segment-aware: `little-helpers` does not include `little-helpers-private`.',
+    '- Shared roots are segment-aware; a path must match complete path segments, not merely a string prefix.',
     '- Shared spaces have no exclusion rules in v1; choose a narrower root instead.',
     '- A shared token cannot access parent paths, siblings, symlink targets, or metadata that reveals private paths.',
     '- Private linked notes are filtered from search, backlinks, neighborhoods, and graph results.',
@@ -132,7 +131,7 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     '',
     '```json',
     '{',
-    '  "path": "little-helpers",',
+    '  "path": "folder-to-share",',
     '  "durationDays": 14',
     '}',
     '```',
@@ -164,17 +163,24 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     '',
     '### 3. Redeem an invite exactly once',
     '',
-    `POST ${redeemUrl}`,
+    'The invite URL identifies the Nabu deployment that owns the shared space. Redeem it against that same deployment; the recipient does not need a Nabu instance.',
+    '',
+    '```text',
+    'Invite URL: https://invite-host.example/invites/opaque-secret',
+    'Redemption endpoint: https://invite-host.example/api/shared-spaces/invites/redeem',
+    '```',
     '',
     '```bash',
-    "INVITE_URL='https://nabu.example.com/invites/opaque-secret'",
-    `curl -sS -X POST ${redeemUrl} \\`,
+    "INVITE_URL='https://invite-host.example/invites/opaque-secret' # use the exact inviteUrl returned by confirmation",
+    'INVITE_API_ORIGIN="${INVITE_URL%%/invites/*}"',
+    'curl -sS -X POST "$INVITE_API_ORIGIN/api/shared-spaces/invites/redeem" \\',
     "  -H 'Content-Type: application/json' \\",
-    "  --data '{\"inviteUrl\":\"https://nabu.example.com/invites/opaque-secret\"}'",
+    '  --data "{\\"inviteUrl\\":\\"$INVITE_URL\\"}"',
     '```',
     '',
     '- The JSON field is exactly `inviteUrl`; do not substitute `invite`, `token`, or `inviteToken`.',
     '- Do not GET the invite URL as the redemption operation. A direct GET may return 404; redemption is the JSON POST above.',
+    '- Send redemption and subsequent shared-vault requests to the invite URL origin, not to an unrelated Nabu deployment.',
     '- A successful `200` response returns `sharedSpaceId`, `rootPath`, `permissions`, `sharedSpaceExpiresAt`, `accessToken`, and `accessTokenExpiresAt`.',
     '- Keep the returned access token in memory or an approved secret store only. Never print it, commit it, or place it in Markdown.',
     '- Use the token on normal vault APIs:',

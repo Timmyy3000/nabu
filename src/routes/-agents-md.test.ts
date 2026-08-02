@@ -16,7 +16,7 @@ describe('GET /agents.md', () => {
   it('returns the complete raw markdown contract without authentication', async () => {
     const handler = Route.options.server.handlers.GET
     const response = await handler({
-      request: new Request('https://nabu.timi.click/agents.md'),
+      request: new Request('https://deployment.test/agents.md'),
     })
     const body = await response.text()
 
@@ -26,9 +26,11 @@ describe('GET /agents.md', () => {
     expect(body).toContain('POST /api/auth/login')
     expect(body).toContain('Read this route before touching the browser UI.')
     expect(body).toContain('Do not use browser automation or browser-use for normal note operations.')
-    expect(body).toContain('https://nabu.timi.click/api/auth/login')
+    expect(body).toContain('https://deployment.test/api/auth/login')
     expect(body).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
     expect(body).toContain('The JSON field is exactly `inviteUrl`')
+    expect(body).toContain('INVITE_API_ORIGIN="${INVITE_URL%%/invites/*}"')
+    expect(body).not.toContain('little-helpers')
     expect(body).toContain('410 SHARED_SPACE_INVITE_INVALID')
     expect(body).toContain('If the deployment runs multiple instances')
     expect(body).toContain('PATCH /api/vault/notes/by-path')
@@ -40,7 +42,7 @@ describe('GET /agents.md', () => {
     const handler = Route.options.server.handlers.GET
     const session = createSessionToken()
     const response = await handler({
-      request: new Request('https://nabu.timi.click/agents.md', {
+      request: new Request('https://deployment.test/agents.md', {
         headers: {
           cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(session)}`,
         },
@@ -54,10 +56,12 @@ describe('GET /agents.md', () => {
     expect(body).toContain('DELETE /api/vault/notes/by-path?path=')
     expect(body).toContain('DELETE /api/vault/folders?path=')
     expect(body).toContain('Use deterministic by-path reads after every mutation.')
-    expect(body).toContain('https://nabu.timi.click/api/vault/notes/by-path?path=projects%2Fexample%2Fnotes%2Fexample.md')
+    expect(body).toContain('https://deployment.test/api/vault/notes/by-path?path=projects%2Fexample%2Fnotes%2Fexample.md')
     expect(body).toContain('When writing notes, prefer canonical frontmatter metadata')
     expect(body).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
     expect(body).toContain('The JSON field is exactly `inviteUrl`')
+    expect(body).toContain('Send redemption and subsequent shared-vault requests to the invite URL origin')
+    expect(body).not.toContain('little-helpers')
     expect(body).toContain('Folder delete is empty-only and non-recursive.')
     expect(body).not.toContain('<html')
   })
