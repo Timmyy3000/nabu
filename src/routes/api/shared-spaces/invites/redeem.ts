@@ -22,4 +22,3 @@ export const Route = createFileRoute('/api/shared-spaces/invites/redeem')({
     },
   },
 })
-

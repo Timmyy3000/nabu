@@ -110,4 +110,3 @@ export function assertVaultPathAccess(
     throw new VaultAuthorizationError('This shared space does not permit writes.', 'VAULT_WRITE_FORBIDDEN')
   }
 }
-

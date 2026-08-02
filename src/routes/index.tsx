@@ -12,16 +12,29 @@ const getAuthStatus = createServerFn({ method: 'GET' }).handler(async ({ request
 
 const loadVaultBrowse = createServerFn({ method: 'GET' })
   .inputValidator((input: { folder: string; note: string }) => input)
-  .handler(async ({ data }) =>
-    getVaultBrowseData({
+  .handler(async ({ request, data }) => {
+    const { requireVaultPrincipal } = await import('../lib/auth/authorization')
+    const auth = await requireVaultPrincipal(request)
+    if (auth.response) {
+      throw redirect({ to: '/login' })
+    }
+
+    return getVaultBrowseData({
       folderPath: data.folder,
       noteSlug: data.note,
-    }),
-  )
+      principal: auth.principal ?? undefined,
+    })
+  })
 
 const loadVaultSearch = createServerFn({ method: 'GET' })
   .inputValidator((input: { q: string; searchPath: string; searchTag: string }) => input)
-  .handler(async ({ data }) => {
+  .handler(async ({ request, data }) => {
+    const { requireVaultPrincipal } = await import('../lib/auth/authorization')
+    const auth = await requireVaultPrincipal(request)
+    if (auth.response) {
+      throw redirect({ to: '/login' })
+    }
+
     if (!data.q.trim()) {
       return null
     }
@@ -30,6 +43,7 @@ const loadVaultSearch = createServerFn({ method: 'GET' })
       query: data.q,
       path: data.searchPath,
       tag: data.searchTag,
+      principal: auth.principal ?? undefined,
     })
   })
 

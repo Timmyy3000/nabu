@@ -52,4 +52,3 @@ export const Route = createFileRoute('/api/shared-spaces/')({
     },
   },
 })
-

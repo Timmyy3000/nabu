@@ -7,4 +7,3 @@ export function parseIfMatchHeader(value: string | null): string | null {
   const match = /^(?:W\/)?"([^"]+)"$/.exec(trimmed)
   return match?.[1] ?? null
 }
-

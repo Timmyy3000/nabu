@@ -66,4 +66,3 @@ describe('vault authorization', () => {
     expect((await service.getAccessTokenForTest(hashSecret(redeemed.accessToken)))?.lastUsedAt).toBe(1_000)
   })
 })
-

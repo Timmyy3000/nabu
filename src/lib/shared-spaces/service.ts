@@ -79,7 +79,7 @@ function iso(value: number): string {
 }
 
 function normalizeSharedRoot(input: string | null | undefined): string {
-  if (input == null || !input.trim()) {
+  if (typeof input !== 'string' || !input.trim()) {
     throw new SharedSpaceError('A non-root folder path is required.', 'SHARED_SPACE_PATH_UNSAFE')
   }
 
@@ -182,6 +182,9 @@ function normalizeDuration(durationDays: number | null | undefined): number {
 
 function normalizePermissions(permissions: SharedSpacePermission[] | null | undefined): SharedSpacePermission[] {
   const requested = permissions ?? ['read', 'write']
+  if (!Array.isArray(requested)) {
+    throw new SharedSpaceError('Shared-space permissions must include read and may include write.', 'SHARED_SPACE_PERMISSIONS_INVALID')
+  }
   const normalized = [...new Set(requested)]
   if (normalized.length === 0 || !normalized.includes('read') || normalized.some((permission) => permission !== 'read' && permission !== 'write')) {
     throw new SharedSpaceError('Shared-space permissions must include read and may include write.', 'SHARED_SPACE_PERMISSIONS_INVALID')

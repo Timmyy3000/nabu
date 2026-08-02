@@ -50,4 +50,3 @@ export function sharedSpaceErrorResponse(error: unknown): Response {
 export function getSharedSpaceService(request: Request): SharedSpaceService {
   return new SharedSpaceService({ baseUrl: new URL(request.url).origin })
 }
-

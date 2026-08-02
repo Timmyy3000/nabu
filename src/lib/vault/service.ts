@@ -179,6 +179,8 @@ export type RevisionMigrationNotice = {
 }
 
 export class VaultWriteRevisionError extends Error {
+  public readonly nextAction: string
+
   constructor(
     public readonly code: 'WRITE_REVISION_REQUIRED' | 'STALE_NOTE_REVISION',
     public readonly relPath: string,
@@ -191,6 +193,10 @@ export class VaultWriteRevisionError extends Error {
         ? 'A note revision is required before this write.'
         : 'The note changed since it was read; re-read, merge, and retry with the latest revision.',
     )
+    this.nextAction =
+      code === 'WRITE_REVISION_REQUIRED'
+        ? 'Read the note first, then retry with its revision in If-Match or expectedRevision.'
+        : 'Re-read the note, merge your changes, then retry with the latest revision in If-Match or expectedRevision.'
     this.name = 'VaultWriteRevisionError'
   }
 }
@@ -1506,10 +1512,7 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
       const body = {
         error: error.message,
         code: error.code,
-        nextAction:
-          error.code === 'WRITE_REVISION_REQUIRED'
-            ? 'Read the note first, then retry with its revision in If-Match or expectedRevision.'
-            : 'Re-read the note, merge your changes, then retry with the latest revision in If-Match or expectedRevision.',
+        nextAction: error.nextAction,
         readUrl: error.readUrl,
         ...(error.currentRevision ? { currentRevision: error.currentRevision } : {}),
       }
@@ -1574,10 +1577,7 @@ export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Pr
       const body = {
         error: error.message,
         code: error.code,
-        nextAction:
-          error.code === 'WRITE_REVISION_REQUIRED'
-            ? 'Read the note first, then retry with its revision in If-Match or expectedRevision.'
-            : 'Re-read the note, merge your changes, then retry with the latest revision in If-Match or expectedRevision.',
+        nextAction: error.nextAction,
         readUrl: error.readUrl,
         ...(error.currentRevision ? { currentRevision: error.currentRevision } : {}),
       }

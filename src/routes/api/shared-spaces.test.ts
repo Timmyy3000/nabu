@@ -101,4 +101,3 @@ describe('shared-space HTTP API', () => {
     expect(reused.status).toBe(410)
   })
 })
-
