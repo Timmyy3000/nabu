@@ -33,6 +33,7 @@ const noteUpdateSchema = z
   .object({
     ...noteWriteShape,
     expectedContentHash: z.string().length(64).optional(),
+    expectedRevision: z.string().length(64).optional(),
   })
   .strict()
   .refine((input) => Boolean(input.rawMarkdown?.trim()) !== Boolean(input.document), {
@@ -43,7 +44,12 @@ const moveSchema = z.object({
   path: pathSchema,
   toPath: pathSchema,
   expectedContentHash: z.string().length(64).optional(),
+  expectedRevision: z.string().length(64).optional(),
 })
+
+const permissionsSchema = z.array(z.enum(['read', 'write'])).min(1).max(2).optional()
+const sharedSpaceIdSchema = z.string().trim().min(1).max(256)
+const sharedSpaceDurationSchema = z.number().int().min(1).max(30).optional()
 
 function asResourcePath(value: string | string[] | undefined): string {
   const encodedPath = Array.isArray(value) ? value.join('/') : value ?? ''
@@ -88,6 +94,30 @@ async function callGateway(operation: () => Promise<unknown>) {
   try {
     return formatResult(await operation())
   } catch (error) {
+    if (typeof error === 'object' && error !== null && 'payload' in error) {
+      const payload = (error as { payload: unknown }).payload
+      return {
+        content: [{ type: 'text' as const, text: boundedJson(payload) }],
+        structuredContent: resultObject(payload),
+        isError: true,
+      }
+    }
+
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+      const typedError = error as { message?: string; code?: string; nextAction?: string; readUrl?: string }
+      const payload = {
+        error: typedError.message ?? 'Nabu MCP request failed',
+        code: typedError.code,
+        ...(typedError.nextAction ? { nextAction: typedError.nextAction } : {}),
+        ...(typedError.readUrl ? { readUrl: typedError.readUrl } : {}),
+      }
+      return {
+        content: [{ type: 'text' as const, text: boundedJson(payload) }],
+        structuredContent: payload,
+        isError: true,
+      }
+    }
+
     return {
       content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Nabu MCP request failed' }],
       isError: true,
@@ -199,6 +229,99 @@ function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     (input) => callGateway(() => gateway.deleteNote(input.path)),
+  )
+
+  server.registerTool(
+    'propose_shared_space',
+    {
+      title: 'Propose shared space',
+      description: 'Preview a complete live recursive vault-folder scope. This has no sharing side effect.',
+      inputSchema: z.object({ path: pathSchema, durationDays: sharedSpaceDurationSchema }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.proposeSharedSpace(input)),
+  )
+
+  server.registerTool(
+    'confirm_shared_space',
+    {
+      title: 'Confirm shared space',
+      description: 'Explicitly confirm a still-valid proposal and create its one-time invite link.',
+      inputSchema: z.object({
+        proposalId: z.string().trim().min(1).max(256),
+        confirmed: z.boolean(),
+        durationDays: sharedSpaceDurationSchema,
+        permissions: permissionsSchema,
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.confirmSharedSpace(input)),
+  )
+
+  server.registerTool(
+    'list_shared_spaces',
+    {
+      title: 'List shared spaces',
+      description: 'List shared-space leases owned by this Nabu instance.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    () => callGateway(() => gateway.listSharedSpaces()),
+  )
+
+  server.registerTool(
+    'get_shared_space',
+    {
+      title: 'Get shared space',
+      description: 'Get one owned shared-space lease by ID.',
+      inputSchema: z.object({ sharedSpaceId: sharedSpaceIdSchema }),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.getSharedSpace(input.sharedSpaceId)),
+  )
+
+  server.registerTool(
+    'revoke_shared_space',
+    {
+      title: 'Revoke shared space',
+      description: 'Revoke a shared-space lease immediately.',
+      inputSchema: z.object({ sharedSpaceId: sharedSpaceIdSchema }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.revokeSharedSpace(input.sharedSpaceId)),
+  )
+
+  server.registerTool(
+    'redeem_shared_space_invite',
+    {
+      title: 'Redeem shared-space invite',
+      description: 'Redeem a one-time invite URL for a scoped access token.',
+      inputSchema: z.object({ inviteUrl: z.string().url().max(4_096) }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.redeemSharedSpaceInvite(input.inviteUrl)),
+  )
+
+  server.registerTool(
+    'create_shared_space_invite',
+    {
+      title: 'Create another shared-space invite',
+      description: 'Create another one-time invite for an active owned shared space.',
+      inputSchema: z.object({ sharedSpaceId: sharedSpaceIdSchema }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.createSharedSpaceInvite(input.sharedSpaceId)),
+  )
+
+  server.registerTool(
+    'extend_shared_space',
+    {
+      title: 'Extend shared space',
+      description: 'Explicitly extend an active lease within the 30-day maximum.',
+      inputSchema: z.object({ sharedSpaceId: sharedSpaceIdSchema, durationDays: z.number().int().min(1).max(30), confirmed: z.boolean() }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.extendSharedSpace(input)),
   )
 }
 

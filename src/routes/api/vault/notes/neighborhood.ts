@@ -5,14 +5,14 @@ export const Route = createFileRoute('/api/vault/notes/neighborhood')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
+        const { requireVaultPrincipal } = await import('../../../../lib/auth/authorization')
+        const auth = await requireVaultPrincipal(request)
+        if (auth.response) {
+          return auth.response
         }
 
         const url = new URL(request.url)
-        return getVaultNoteNeighborhoodResponse(url.searchParams.get('path'))
+        return getVaultNoteNeighborhoodResponse(url.searchParams.get('path'), auth.principal ?? undefined)
       },
     },
   },

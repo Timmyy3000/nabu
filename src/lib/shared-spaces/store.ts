@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite'
 import type {
   SharedSpaceAccessTokenRecord,
   SharedSpaceInviteRecord,
@@ -136,7 +136,7 @@ function changedRows(result: { changes: bigint | number }): number {
   return typeof result.changes === 'bigint' ? Number(result.changes) : result.changes
 }
 
-function withTransaction<T>(db: DatabaseSync, operation: () => T): T {
+function withTransaction<T>(db: DatabaseSyncType, operation: () => T): T {
   db.exec('BEGIN IMMEDIATE')
   try {
     const result = operation()
@@ -427,12 +427,21 @@ function createStore(databasePath: string): SharedSpaceStore {
     },
 
     extendSpace(id, expiresAt) {
-      const result = db.prepare('UPDATE shared_spaces SET expires_at = ? WHERE id = ? AND revoked_at IS NULL').run(expiresAt, id)
-      if (changedRows(result) !== 1) {
-        return null
-      }
-      const row = db.prepare('SELECT * FROM shared_spaces WHERE id = ?').get(id) as SqlRow | undefined
-      return row ? mapSpace(row) : null
+      return withTransaction(db, () => {
+        const result = db.prepare('UPDATE shared_spaces SET expires_at = ? WHERE id = ? AND revoked_at IS NULL').run(expiresAt, id)
+        if (changedRows(result) !== 1) {
+          return null
+        }
+
+        db.prepare(`
+          UPDATE shared_space_access_tokens
+          SET expires_at = ?
+          WHERE shared_space_id = ? AND revoked_at IS NULL AND expires_at < ?
+        `).run(expiresAt, id, expiresAt)
+
+        const row = db.prepare('SELECT * FROM shared_spaces WHERE id = ?').get(id) as SqlRow | undefined
+        return row ? mapSpace(row) : null
+      })
     },
 
     getAccessTokenForTest(tokenHash) {

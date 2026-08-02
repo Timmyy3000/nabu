@@ -12,3 +12,4 @@ private-content/
 scratchpad/
 .hermes/
 .output/
+.nabu-data/

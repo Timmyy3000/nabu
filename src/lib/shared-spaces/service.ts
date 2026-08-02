@@ -37,6 +37,7 @@ type SharedSpaceServiceOptions = {
 type SharedSpaceProposalInput = {
   ownerPrincipalId: string
   path: string | null | undefined
+  durationDays?: number | null
 }
 
 type SharedSpaceConfirmationInput = {
@@ -133,7 +134,7 @@ async function resolveRealSharedRoot(rootPath: string, relativePath: string): Pr
   return resolved
 }
 
-async function scanSharedRoot(vaultRoot: string, rootPath: string, absoluteRoot: string): Promise<FolderScan> {
+async function scanSharedRoot(vaultRoot: string, absoluteRoot: string): Promise<FolderScan> {
   const files: string[] = []
   const folders: string[] = []
   let totalBytes = 0
@@ -225,10 +226,11 @@ export class SharedSpaceService {
   }
 
   async proposeSharedSpace(input: SharedSpaceProposalInput): Promise<SharedSpacePreview> {
+    normalizeDuration(input.durationDays)
     const rootPath = normalizeSharedRoot(input.path)
     const { rootPath: vaultRoot } = await getVaultConfig()
     const absoluteRoot = await resolveRealSharedRoot(vaultRoot, rootPath)
-    const scan = await scanSharedRoot(vaultRoot, rootPath, absoluteRoot)
+    const scan = await scanSharedRoot(vaultRoot, absoluteRoot)
     const now = this.now()
     const proposalId = generateId('proposal')
     const preview: SharedSpacePreview = {

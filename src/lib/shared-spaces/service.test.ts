@@ -124,6 +124,18 @@ describe('shared-space service', () => {
     expect(confirmed.inviteUrl).toMatch(/^https:\/\/nabu\.example\/invites\/[A-Za-z0-9_-]+$/)
   })
 
+  it('expires proposals before they can create a shared space', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    let now = 1_000
+    const service = new SharedSpaceService({ now: () => now })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    now += 10 * 60 * 1_000 + 1
+
+    await expect(
+      service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true }),
+    ).rejects.toMatchObject({ code: 'SHARED_SPACE_PROPOSAL_INVALID', status: 410 })
+  })
+
   it('redeems a one-time invite atomically and stores only hashes', async () => {
     await createFixture({ 'little-helpers/readme.md': '# Helpers' })
     const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example' })
@@ -147,8 +159,7 @@ describe('shared-space service', () => {
     if (redeemed?.status !== 'fulfilled') {
       throw new Error('expected a successful redemption')
     }
-    expect(redeemed.value.accessToken).not.toBe(redeemed.value.accessTokenHash)
-    expect(redeemed.value.accessTokenHash).toBeUndefined()
+    expect('accessTokenHash' in redeemed.value).toBe(false)
     expect(redeemed.value.sharedSpaceId).toBe(confirmed.sharedSpaceId)
 
     const accessToken = await service.getAccessTokenForTest(hashSecret(redeemed.value.accessToken))
@@ -183,5 +194,28 @@ describe('shared-space service', () => {
     await expect(service.redeemSharedSpaceInvite({ inviteUrl: second.inviteUrl })).rejects.toMatchObject({
       code: 'SHARED_SPACE_INVITE_INVALID',
     })
+  })
+
+  it('extends active leases and keeps redeemed tokens valid through the extension', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      durationDays: 7,
+    })
+    const redeemed = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl })
+    const extended = await service.extendSharedSpace({
+      ownerPrincipalId: 'owner',
+      sharedSpaceId: confirmed.sharedSpaceId,
+      durationDays: 14,
+      confirmed: true,
+    })
+
+    const accessToken = await service.getAccessTokenForTest(hashSecret(redeemed.accessToken))
+    expect(extended.sharedSpaceExpiresAt).toBe(new Date(1_000 + 14 * 24 * 60 * 60 * 1_000).toISOString())
+    expect(accessToken?.expiresAt).toBe(Date.parse(extended.sharedSpaceExpiresAt))
   })
 })

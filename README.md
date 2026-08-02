@@ -43,6 +43,8 @@ Current direction:
 - Wiki-link + markdown-link parsing, backlinks, and note neighborhood traversal
 - `/agents.md` agent-facing entrypoint with explicit read/write API contract
 - Authenticated folder creation and markdown note create/update by path
+- Temporary live-recursive shared spaces with one-time invite redemption
+- Revision-aware note writes with a backwards-compatible owner migration path
 
 ## Open-source model
 
@@ -72,6 +74,7 @@ TanStack Start currently serves both the frontend routes and the server-backed A
 If you want an agent to install Nabu for a human with minimal back-and-forth, start here:
 
 - [SETUP.md](./SETUP.md) — agent-first deployment and persistence guide
+- [docs/authentication.md](./docs/authentication.md) — password, bearer, shared-space, and revision security
 
 ## Local development
 
