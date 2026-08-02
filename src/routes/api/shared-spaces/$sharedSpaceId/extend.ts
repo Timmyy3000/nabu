@@ -23,7 +23,7 @@ export const Route = createFileRoute('/api/shared-spaces/$sharedSpaceId/extend')
           const space = await getSharedSpaceService(request).extendSharedSpace({
             ownerPrincipalId: auth.principal!.principalId,
             sharedSpaceId: params.sharedSpaceId,
-            durationDays: typeof body.durationDays === 'number' ? body.durationDays : 0,
+            durationDays: typeof body.durationDays === 'number' ? body.durationDays : undefined,
             confirmed: body.confirmed === true,
           })
           return Response.json(space)

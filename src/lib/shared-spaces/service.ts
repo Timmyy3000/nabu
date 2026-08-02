@@ -420,7 +420,7 @@ export class SharedSpaceService {
     }
   }
 
-  async extendSharedSpace(input: { ownerPrincipalId: string; sharedSpaceId: string; durationDays: number; confirmed: boolean }): Promise<SharedSpaceDetails> {
+  async extendSharedSpace(input: { ownerPrincipalId: string; sharedSpaceId: string; durationDays?: number | null; confirmed: boolean }): Promise<SharedSpaceDetails> {
     if (input.confirmed !== true) {
       throw new SharedSpaceError('Explicit confirmation is required before extending a shared space.', 'SHARED_SPACE_CONFIRMATION_REQUIRED')
     }

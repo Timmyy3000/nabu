@@ -6,6 +6,7 @@ import { AUTH_COOKIE_NAME, createSessionToken } from '../../lib/auth/session'
 import { __resetSharedSpaceServiceForTests } from '../../lib/shared-spaces/service'
 import { Route as ProposalsRoute } from './shared-spaces/proposals'
 import { Route as SpacesRoute } from './shared-spaces/index'
+import { Route as ExtendRoute } from './shared-spaces/$sharedSpaceId/extend'
 import { Route as RedeemRoute } from './shared-spaces/invites/redeem'
 
 const originalKnowledgePath = process.env.KNOWLEDGE_PATH
@@ -69,12 +70,23 @@ describe('shared-space HTTP API', () => {
       request: new Request('http://localhost:3000/api/shared-spaces', {
         method: 'POST',
         headers: { ...ownerHeaders(), 'content-type': 'application/json' },
-        body: JSON.stringify({ proposalId: proposal.proposalId, confirmed: true, durationDays: 14 }),
+        body: JSON.stringify({ proposalId: proposal.proposalId, confirmed: true, durationDays: 1 }),
       }),
     })
     const invite = await confirmed.json()
     expect(confirmed.status).toBe(201)
     expect(invite.inviteUsesRemaining).toBe(1)
+
+    const extended = await ExtendRoute.options.server!.handlers!.POST({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${invite.sharedSpaceId}/extend`, {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ confirmed: true }),
+      }),
+      params: { sharedSpaceId: invite.sharedSpaceId },
+    })
+    expect(extended.status).toBe(200)
+    expect((await extended.json()).sharedSpaceExpiresAt).toEqual(expect.any(String))
 
     const listed = await spacesHandler.GET({ request: new Request('http://localhost:3000/api/shared-spaces', { headers: ownerHeaders() }) })
     expect((await listed.json()).spaces).toHaveLength(1)
