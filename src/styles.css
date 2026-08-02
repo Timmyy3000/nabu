@@ -697,6 +697,19 @@ pre,
   margin: 16px 0;
 }
 
+.note-markdown ul,
+.note-markdown ol {
+  padding-left: 22px;
+}
+
+.note-markdown ul {
+  list-style-type: disc;
+}
+
+.note-markdown ol {
+  list-style-type: decimal;
+}
+
 .note-markdown a,
 .docs-surface a {
   color: var(--accent);
