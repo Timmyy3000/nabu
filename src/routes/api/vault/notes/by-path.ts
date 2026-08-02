@@ -52,12 +52,14 @@ export const Route = createFileRoute('/api/vault/notes/by-path')({
             body?: string | null
           } | null
           expectedContentHash?: string | null
+          expectedRawContentHash?: string | null
         }
         return updateVaultNoteByPathResponse({
           path: payload.path ?? null,
           rawMarkdown: payload.rawMarkdown ?? null,
           document: payload.document ?? null,
           expectedContentHash: payload.expectedContentHash ?? null,
+          expectedRawContentHash: payload.expectedRawContentHash ?? null,
         })
       },
       PATCH: async ({ request }) => {

@@ -36,12 +36,12 @@ The knowledge bank should stay private unless intentionally shared.
 - `GET /api/vault/tree` → folder hierarchy
 - `GET /api/vault/folders?path=` → folder listing for a vault-relative path
 - `GET /api/vault/notes/$slug` → note lookup by slug with collision metadata
-- `GET /api/vault/notes/by-path?path=` → deterministic note lookup by canonical vault-relative path
+- `GET /api/vault/notes/by-path?path=` → deterministic note lookup by canonical vault-relative path, including exact `rawMarkdown` and an additive `rawContentHash` revision for source editing
 - `GET /api/vault/notes/neighborhood?path=` → outgoing links, backlinks, related notes, and stats
 - `GET /api/vault/search?q=&path=&tag=` → lexical search with exact phrase parsing and path/tag filters
 - `POST /api/vault/folders` → create folders inside the mounted vault
 - `POST /api/vault/notes` → create markdown notes
-- `PUT /api/vault/notes/by-path` → update markdown notes by canonical path
+- `PUT /api/vault/notes/by-path` → update markdown notes by canonical path; human source saves can include `expectedRawContentHash` to reject stale raw-file edits
 
 ## Long-term ideas
 

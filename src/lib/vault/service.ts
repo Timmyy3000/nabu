@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
-import { hashVaultNote } from './content-hash'
+import { hashVaultNote, hashVaultRawMarkdown } from './content-hash'
 import { getVaultConfig } from './config'
 import {
   createVaultFolder as createVaultFolderOnDisk,
@@ -69,6 +69,8 @@ type VaultNotePayload = {
   updatedAt: string | null
   frontmatter: Record<string, unknown>
   body: string
+  rawMarkdown: string
+  rawContentHash: string
   outgoingLinks: VaultNoteLink[]
   backlinks: VaultBacklink[]
 }
@@ -119,6 +121,7 @@ type VaultNoteWriteInput = {
 
 type VaultNoteUpdateInput = VaultNoteWriteInput & {
   expectedContentHash?: string | null | undefined
+  expectedRawContentHash?: string | null | undefined
 }
 
 type VaultNoteMoveInput = {
@@ -268,6 +271,8 @@ function toVaultNotePayload(note: ParsedVaultNote, backlinks: VaultBacklink[]): 
     updatedAt: note.updatedAt,
     frontmatter: note.frontmatter,
     body: note.body,
+    rawMarkdown: note.rawMarkdown,
+    rawContentHash: hashVaultRawMarkdown(note.rawMarkdown),
     outgoingLinks: note.outgoingLinks,
     backlinks,
   }
@@ -770,6 +775,22 @@ async function assertExpectedContentHash(relPath: string, expectedContentHash: s
   }
 }
 
+async function assertExpectedRawContentHash(relPath: string, expectedRawContentHash: string | null | undefined): Promise<void> {
+  if (!expectedRawContentHash) {
+    return
+  }
+
+  const index = await rebuildVaultIndex()
+  const parsed = index.byRelPath.get(relPath)
+  if (!parsed) {
+    throw new Error(`Note not found: ${relPath}`)
+  }
+
+  if (hashVaultRawMarkdown(parsed.rawMarkdown) !== expectedRawContentHash) {
+    throw new Error('Note changed since it was read; retry with the latest rawContentHash')
+  }
+}
+
 export async function createVaultFolder(folderPathInput: string): Promise<VaultFolderCreateResult> {
   return withVaultMutation(async () => {
     const normalizedPath = normalizeFolderCreatePathInput(folderPathInput)
@@ -822,6 +843,7 @@ export async function updateVaultNote(input: VaultNoteUpdateInput): Promise<Vaul
     const normalizedPath = normalizeMarkdownNotePathInput(input.path)
     const { rootPath } = await getVaultConfig()
     await assertExpectedContentHash(normalizedPath, input.expectedContentHash)
+    await assertExpectedRawContentHash(normalizedPath, input.expectedRawContentHash)
     const now = currentIsoTimestamp()
     const rawMarkdown = input.document
       ? materializeNoteMarkdown(input, {
@@ -1261,6 +1283,10 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
     }
 
     if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest contentHash') {
+      return Response.json({ error: error.message }, { status: 409 })
+    }
+
+    if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest rawContentHash') {
       return Response.json({ error: error.message }, { status: 409 })
     }
 
