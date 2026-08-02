@@ -4,8 +4,8 @@ import { renderAgentsMarkdown } from '../pages/agents'
 export const Route = createFileRoute('/agents.md')({
   server: {
     handlers: {
-      GET: async ({ request }) => {
-        const body = renderAgentsMarkdown(new URL(request.url).origin)
+      GET: async () => {
+        const body = renderAgentsMarkdown()
         return new Response(body, {
           status: 200,
           headers: {

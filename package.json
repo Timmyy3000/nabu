@@ -9,6 +9,8 @@
     "mcp": "tsx src/mcp/stdio.ts",
     "build": "vite build",
     "verify:build": "node scripts/verify-production-assets.mjs",
+    "verify:agent-skill": "node scripts/verify-nabu-agent-skill.mjs",
+    "sync:agent-skill": "node scripts/sync-nabu-agent-skill.mjs",
     "verify:server": "node scripts/verify-production-server.mjs",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview",
