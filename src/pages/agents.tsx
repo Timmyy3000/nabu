@@ -139,6 +139,8 @@ export function renderAgentsMarkdown(authenticated: boolean, baseUrl = 'http://l
     '',
     '- Note create/update bodies must use `rawMarkdown` or a structured `document` payload, but never both.',
     '- Structured document payloads are preferred for agent-authored notes because they render canonical frontmatter metadata.',
+    '- By-path note reads include the exact `rawMarkdown` and additive `rawContentHash` fields used by the human source editor.',
+    '- Human source saves may send `expectedRawContentHash`; a `409` means the raw file changed since it was read. Existing `expectedContentHash` remains the parsed-note agent contract.',
     '- Note move body: `{ "path": "from.md", "toPath": "to.md" }`.',
     '- Note delete deletes a single note only.',
     '- Folder delete only deletes empty folders.',

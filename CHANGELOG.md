@@ -12,6 +12,19 @@ All notable changes to Nabu will be documented in this file.
 - Applied shared-space filtering to vault trees, folders, notes, search, backlinks, neighborhoods, and mutations
 - Added note revisions and ETags with strict shared-token writes, structured `428`/`409` responses, and a backwards-compatible owner migration warning
 - Documented the read → merge → retry workflow and temporary shared-space security model
+## [0.6.1] - 2026-08-01
+
+Search transition fix release.
+
+### Shipped
+
+- Prevented search form submissions from replacing the document and briefly showing unstyled server HTML
+- Added a regression test covering client-side search navigation and all submitted search fields
+- Preserved the native GET fallback for JavaScript-disabled clients
+
+### Why it matters
+
+Search now stays inside the existing client-rendered document, keeping the loaded stylesheet in place while route data refreshes and removing the distracting flash during normal use.
 
 ## [0.6.0] - 2026-08-01
 

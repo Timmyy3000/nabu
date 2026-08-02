@@ -54,6 +54,7 @@ export const Route = createFileRoute('/api/vault/notes/by-path')({
           } | null
           expectedContentHash?: string | null
           expectedRevision?: string | null
+          expectedRawContentHash?: string | null
         }
         return updateVaultNoteByPathResponse({
           path: payload.path ?? null,
@@ -62,6 +63,7 @@ export const Route = createFileRoute('/api/vault/notes/by-path')({
           expectedContentHash: payload.expectedContentHash ?? null,
           expectedRevision: payload.expectedRevision ?? parseIfMatchHeader(request.headers.get('if-match')),
           principal: auth.principal ?? undefined,
+          expectedRawContentHash: payload.expectedRawContentHash ?? null,
         })
       },
       PATCH: async ({ request }) => {
