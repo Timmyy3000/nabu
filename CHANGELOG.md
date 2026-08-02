@@ -4,6 +4,20 @@ All notable changes to Nabu will be documented in this file.
 
 ## Unreleased
 
+## [0.7.1] - 2026-08-02
+
+Agent contract release.
+
+### Changed
+
+- Published the complete deployment and integration contract for agents at `/agents.md`.
+- Clarified setup, authentication, note operations, search, traversal, and shared-space workflows.
+- Made the contract origin-aware so hosted agents can use the current Nabu instance without localhost assumptions.
+
+### Why it matters
+
+Agents now have a complete, deployable contract for operating Nabu instead of a partial route description.
+
 ## [0.7.0] - 2026-08-02
 
 Agent-first collaboration release.
