@@ -25,6 +25,17 @@ KNOWLEDGE_PATH=/data/nabu/knowledge
 NABU_PASSWORD="set-a-real-password-here"
 ```
 
+Optional shared-space metadata is stored durably outside the Markdown vault:
+
+```bash
+NABU_DATA_PATH=/data/nabu/app-data
+```
+
+Keep this directory on persistent storage. It contains lease metadata and
+token hashes, never raw invite or access-token secrets. Remote MCP derives its
+owner bearer credential from the same `NABU_PASSWORD`; no separate agent-token
+configuration is supported.
+
 ## Local MCP access
 
 Nabu includes an agent-first MCP server that runs as a local stdio process. The
@@ -83,7 +94,7 @@ The MCP process exposes traversal, search, note resources, and note
 create/update/move/delete operations through stdio. A native remote `/mcp`
 endpoint with OAuth, Origin validation, and deployment-specific proxy guidance
 is intentionally a separate follow-up. Remote MCP clients using the removed
-agent-token configuration must be reconfigured with `NABU_PASSWORD`.
+separate agent-token configuration must be reconfigured with `NABU_PASSWORD`.
 
 ## The non-negotiables
 

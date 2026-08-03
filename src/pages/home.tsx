@@ -1,6 +1,6 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useBlocker, useNavigate, useRouter } from '@tanstack/react-router'
 import type { FormEvent, ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { VaultNoteLink } from '../lib/vault/parse-note'
@@ -93,6 +93,28 @@ function estimateReadTime(text: string): string {
 
 function formatReason(reason: string): string {
   return reason.replace(/-/g, ' ')
+}
+
+type EditorSaveState = 'idle' | 'saving' | 'saved' | 'error' | 'conflict'
+
+function editorStatusLabel(state: EditorSaveState, dirty: boolean): string {
+  if (state === 'saving') {
+    return 'saving…'
+  }
+
+  if (state === 'saved') {
+    return 'saved'
+  }
+
+  if (state === 'conflict') {
+    return 'conflict'
+  }
+
+  if (state === 'error') {
+    return 'save failed'
+  }
+
+  return dirty ? 'unsaved' : 'saved'
 }
 
 function buildTagSearchState(folderPath: string, selectedNoteSlug: string | null, tag: string) {
@@ -318,9 +340,122 @@ export function HomePage({
 }) {
   const folderTitle = browse.folder.path || 'root'
   const searchActive = search?.normalizedQuery ? true : false
+  const router = useRouter()
   const navigate = useNavigate()
   const [detailsOpenFor, setDetailsOpenFor] = useState<string | null>(null)
+  const [editingNotePath, setEditingNotePath] = useState<string | null>(null)
+  const [editorValue, setEditorValue] = useState('')
+  const [editorBaseValue, setEditorBaseValue] = useState('')
+  const [editorRevision, setEditorRevision] = useState('')
+  const [editorSaveState, setEditorSaveState] = useState<EditorSaveState>('idle')
+  const [editorError, setEditorError] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const editorRef = useRef<HTMLTextAreaElement | null>(null)
+
+  const editing = browse.note ? editingNotePath === browse.note.relPath : false
+  const editorDirty = editing ? editorValue !== editorBaseValue : false
+
+  const exitEditing = useCallback(() => {
+    if (editorDirty && !window.confirm('Discard unsaved changes?')) {
+      return
+    }
+
+    setEditingNotePath(null)
+    setEditorValue('')
+    setEditorBaseValue('')
+    setEditorRevision('')
+    setEditorSaveState('idle')
+    setEditorError(null)
+  }, [editorDirty])
+
+  const saveEditor = useCallback(async () => {
+    const note = browse.note
+    if (!note || !editing || editorSaveState === 'saving' || !editorDirty) {
+      return
+    }
+
+    setEditorSaveState('saving')
+    setEditorError(null)
+
+    try {
+      const response = await fetch('/api/vault/notes/by-path', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          path: note.relPath,
+          rawMarkdown: editorValue,
+          expectedRawContentHash: editorRevision,
+        }),
+      })
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null
+
+      if (!response.ok) {
+        const conflict = response.status === 409
+        setEditorSaveState(conflict ? 'conflict' : 'error')
+        setEditorError(payload?.error ?? 'Unable to save note')
+        return
+      }
+
+      setEditorBaseValue(editorValue)
+      setEditorSaveState('saved')
+      await router.invalidate()
+      setEditingNotePath(null)
+      setEditorValue('')
+      setEditorBaseValue('')
+      setEditorRevision('')
+    } catch {
+      setEditorSaveState('error')
+      setEditorError('Unable to save note')
+    }
+  }, [browse.note, editorDirty, editorRevision, editorSaveState, editorValue, editing, router])
+
+  useBlocker({
+    shouldBlockFn: () => !window.confirm('Discard unsaved changes?'),
+    enableBeforeUnload: false,
+    disabled: !editorDirty,
+  })
+
+  const reloadLatestNote = useCallback(async () => {
+    const note = browse.note
+    if (!note) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/vault/notes/by-path?path=${encodeURIComponent(note.relPath)}`)
+      const payload = (await response.json().catch(() => null)) as { note?: { rawMarkdown: string; rawContentHash: string }; error?: string } | null
+
+      if (!response.ok || !payload?.note) {
+        setEditorSaveState('error')
+        setEditorError(payload?.error ?? 'Unable to reload note')
+        return
+      }
+
+      setEditorValue(payload.note.rawMarkdown)
+      setEditorBaseValue(payload.note.rawMarkdown)
+      setEditorRevision(payload.note.rawContentHash)
+      setEditorSaveState('idle')
+      setEditorError(null)
+    } catch {
+      setEditorSaveState('error')
+      setEditorError('Unable to reload note')
+    }
+  }, [browse.note])
+
+  function enterEditing() {
+    if (!browse.note) {
+      return
+    }
+
+    setEditingNotePath(browse.note.relPath)
+    setEditorValue(browse.note.rawMarkdown)
+    setEditorBaseValue(browse.note.rawMarkdown)
+    setEditorRevision(browse.note.rawContentHash)
+    setEditorSaveState('idle')
+    setEditorError(null)
+  }
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -354,6 +489,48 @@ export function HomePage({
     window.addEventListener('keydown', handleKeydown)
     return () => window.removeEventListener('keydown', handleKeydown)
   }, [])
+
+  useEffect(() => {
+    if (editing) {
+      editorRef.current?.focus()
+    }
+  }, [editing])
+
+  useEffect(() => {
+    if (!editorDirty) {
+      return
+    }
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [editorDirty])
+
+  useEffect(() => {
+    function handleEditorKeydown(event: KeyboardEvent) {
+      if (!editing) {
+        return
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        void saveEditor()
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        exitEditing()
+      }
+    }
+
+    window.addEventListener('keydown', handleEditorKeydown)
+    return () => window.removeEventListener('keydown', handleEditorKeydown)
+  }, [editing, exitEditing, saveEditor])
 
   const renderedMarkdown = useMemo(() => {
     if (!browse.note) {
@@ -574,14 +751,63 @@ export function HomePage({
                   >
                     {browse.note.relPath}
                   </button>
+                  {!editing ? (
+                    <button type="button" className="ui-button" aria-label="Edit note" onClick={enterEditing}>
+                      edit
+                    </button>
+                  ) : null}
                 </div>
 
-                <div className="note-markdown">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderedMarkdown}</ReactMarkdown>
-                </div>
+                {editing ? (
+                  <section className="note-editor" aria-label="Markdown editor">
+                    <div className="editor-toolbar">
+                      <span className="editor-mode-label">source</span>
+                      <span className={editorSaveState === 'conflict' || editorSaveState === 'error' ? 'editor-status is-error' : 'editor-status'} aria-live="polite">
+                        {editorStatusLabel(editorSaveState, editorDirty)}
+                      </span>
+                      <button type="button" className="text-button" onClick={exitEditing}>
+                        cancel
+                      </button>
+                      <button type="button" className="ui-button" onClick={() => void saveEditor()} disabled={editorSaveState === 'saving' || !editorDirty}>
+                        save
+                      </button>
+                    </div>
+                    <label htmlFor="note-markdown-editor" className="sr-only">
+                      Markdown editor
+                    </label>
+                    <textarea
+                      ref={editorRef}
+                      id="note-markdown-editor"
+                      className="markdown-editor"
+                      value={editorValue}
+                      onChange={(event) => {
+                        setEditorValue(event.target.value)
+                        if (editorSaveState !== 'saving') {
+                          setEditorSaveState('idle')
+                          setEditorError(null)
+                        }
+                      }}
+                      spellCheck={false}
+                    />
+                    {editorError ? (
+                      <div className="editor-error" role="alert">
+                        <p>{editorError}</p>
+                        {editorSaveState === 'conflict' ? (
+                          <button type="button" className="text-button" onClick={() => void reloadLatestNote()}>
+                            reload latest
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </section>
+                ) : (
+                  <div className="note-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderedMarkdown}</ReactMarkdown>
+                  </div>
+                )}
               </div>
 
-              <DetailsDrawer browse={browse} neighborhood={browse.noteNeighborhood} open={detailsOpen} />
+              {!editing ? <DetailsDrawer browse={browse} neighborhood={browse.noteNeighborhood} open={detailsOpen} /> : null}
             </div>
           </>
         ) : (

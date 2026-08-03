@@ -5,13 +5,13 @@ export const Route = createFileRoute('/api/vault/')({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const { requireAuthenticatedApiRequest } = await import('../../../lib/auth/session')
-        const unauthorizedResponse = requireAuthenticatedApiRequest(request)
-        if (unauthorizedResponse) {
-          return unauthorizedResponse
+        const { requireVaultPrincipal } = await import('../../../lib/auth/authorization')
+        const auth = await requireVaultPrincipal(request)
+        if (auth.response) {
+          return auth.response
         }
 
-        return getVaultIndexResponse()
+        return getVaultIndexResponse(auth.principal ?? undefined)
       },
     },
   },

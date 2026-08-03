@@ -8,6 +8,8 @@ import { HomePage } from './home'
 const navigate = vi.hoisted(() => vi.fn())
 
 vi.mock('@tanstack/react-router', () => ({
+  useBlocker: vi.fn(),
+  useRouter: () => ({ invalidate: vi.fn().mockResolvedValue(undefined) }),
   Link: ({ children, to, search, ...props }: ComponentProps<'a'> & { to?: string; search?: unknown }) => {
     const href = typeof to === 'string' ? to : '/'
     const previousSearch = {
@@ -86,6 +88,8 @@ function buildBrowseFixture() {
         status: 'draft',
         confidence: 'high',
       },
+      rawMarkdown: '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
+      rawContentHash: 'alpha-raw-hash',
       body: '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
       outgoingLinks: [
         {
@@ -192,6 +196,7 @@ beforeEach(() => {
     value: { writeText },
   })
   writeText.mockClear()
+  vi.stubGlobal('fetch', vi.fn())
 })
 
 describe('HomePage', () => {
@@ -208,12 +213,128 @@ describe('HomePage', () => {
     expect(container.querySelector('.vault-reader')).toBeTruthy()
   })
 
+  it('preserves flat and nested ordered and unordered list structure in the reading view', () => {
+    const browse = buildBrowseFixture()
+    const markdown = `## Ordered list
+
+1. First item
+2. Second item
+   - Nested bullet
+   - Nested bullet
+3. Third item
+
+## Unordered list
+
+- First item
+- Second item
+  1. Nested ordered item
+     - Deep bullet
+- Third item`
+    browse.note.body = markdown
+    browse.note.rawMarkdown = markdown
+
+    const { container } = render(<HomePage browse={browse} search={null} searchPathInput="" searchTagInput="" />)
+    const noteMarkdown = container.querySelector('.note-markdown')
+    const topLevelLists = Array.from(noteMarkdown?.children ?? []).filter((child) => child.tagName === 'OL' || child.tagName === 'UL')
+
+    expect(topLevelLists.map((list) => list.tagName)).toEqual(['OL', 'UL'])
+
+    const [ordered, unordered] = topLevelLists
+    expect(ordered.children).toHaveLength(3)
+    expect(unordered.children).toHaveLength(3)
+    expect(ordered.querySelector('li:nth-child(2) > ul')?.children).toHaveLength(2)
+    expect(unordered.querySelector('li:nth-child(2) > ol')?.children).toHaveLength(1)
+    expect(unordered.querySelector('li:nth-child(2) > ol li > ul')).toHaveTextContent('Deep bullet')
+  })
+
   it('copies the canonical note path when the path label is clicked', () => {
     render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
     fireEvent.click(screen.getByRole('button', { name: /copy note path/i }))
 
     expect(writeText).toHaveBeenCalledWith('ideas/alpha.md')
+  })
+
+  it('enters explicit-save Markdown editing mode with the exact source', () => {
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit note/i }))
+
+    expect(screen.getByRole('textbox', { name: /markdown editor/i })).toHaveValue(
+      '# Alpha\n\nSee [[beta]] and [Roadmap Doc](../projects/roadmap.md).',
+    )
+    expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+  })
+
+  it('saves the exact Markdown source with the raw revision and refreshes the route', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          updated: true,
+          note: {
+            ...buildBrowseFixture().note,
+            rawMarkdown: '# Alpha\n\nEdited.',
+            rawContentHash: 'edited-raw-hash',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+    fireEvent.click(screen.getByRole('button', { name: /edit note/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /markdown editor/i }), { target: { value: '# Alpha\n\nEdited.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await screen.findByRole('button', { name: /edit note/i })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/vault/notes/by-path',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          path: 'ideas/alpha.md',
+          rawMarkdown: '# Alpha\n\nEdited.',
+          expectedRawContentHash: 'alpha-raw-hash',
+        }),
+      }),
+    )
+  })
+
+  it('keeps the draft visible when the raw revision is stale', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Note changed since it was read; retry with the latest rawContentHash' }), {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          note: {
+            rawMarkdown: '# Alpha\n\nLatest from agent.',
+            rawContentHash: 'latest-raw-hash',
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
+    fireEvent.click(screen.getByRole('button', { name: /edit note/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /markdown editor/i }), { target: { value: '# Alpha\n\nDraft survives.' } })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(await screen.findByText(/changed since it was read/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /markdown editor/i })).toHaveValue('# Alpha\n\nDraft survives.')
+
+    fireEvent.click(screen.getByRole('button', { name: /reload latest/i }))
+
+    expect(await screen.findByRole('textbox', { name: /markdown editor/i })).toHaveValue('# Alpha\n\nLatest from agent.')
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled()
   })
 
   it('renders internal wiki and markdown note links as app navigation links', () => {
