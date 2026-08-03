@@ -12,9 +12,9 @@ import {
   sanitizeRedirectPath,
   verifySessionToken,
 } from './session'
+import { deriveAgentCredential } from './agent-credential'
 
 const ORIGINAL_PASSWORD = process.env.NABU_PASSWORD
-const ORIGINAL_AGENT_TOKEN = process.env.NABU_AGENT_TOKEN
 
 beforeEach(() => {
   process.env.NABU_PASSWORD = 'test-password'
@@ -22,7 +22,6 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env.NABU_PASSWORD = ORIGINAL_PASSWORD
-  process.env.NABU_AGENT_TOKEN = ORIGINAL_AGENT_TOKEN
 })
 
 describe('session auth', () => {
@@ -58,19 +57,16 @@ describe('session auth', () => {
     expect(unauthorizedResponse?.status).toBe(401)
   })
 
-  it('authenticates a configured bearer token for agent requests', () => {
-    process.env.NABU_AGENT_TOKEN = 'agent-token'
+  it('authenticates a password-derived bearer credential for agent requests', () => {
     const request = new Request('http://localhost:3000/api/vault/', {
-      headers: { Authorization: 'Bearer agent-token' },
+      headers: { Authorization: `Bearer ${deriveAgentCredential('test-password')}` },
     })
 
     expect(isAgentAuthenticatedRequest(request)).toBe(true)
     expect(requireAuthenticatedApiRequest(request)).toBeNull()
   })
 
-  it('rejects missing, malformed, and incorrect bearer tokens', () => {
-    process.env.NABU_AGENT_TOKEN = 'agent-token'
-
+  it('rejects missing, malformed, wrong-password, and arbitrary bearer credentials', () => {
     expect(isAgentAuthenticatedRequest(new Request('http://localhost:3000'))).toBe(false)
     expect(
       isAgentAuthenticatedRequest(
@@ -79,7 +75,14 @@ describe('session auth', () => {
     ).toBe(false)
     expect(
       isAgentAuthenticatedRequest(
-        new Request('http://localhost:3000', { headers: { Authorization: 'Bearer wrong-token' } }),
+        new Request('http://localhost:3000', {
+          headers: { Authorization: `Bearer ${deriveAgentCredential('wrong-password')}` },
+        }),
+      ),
+    ).toBe(false)
+    expect(
+      isAgentAuthenticatedRequest(
+        new Request('http://localhost:3000', { headers: { Authorization: `Bearer ${'a'.repeat(40)}` } }),
       ),
     ).toBe(false)
   })

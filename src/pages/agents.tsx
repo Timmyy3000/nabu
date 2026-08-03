@@ -48,7 +48,7 @@ export function renderAgentsMarkdown(authenticated: boolean, baseUrl = 'http://l
     `- Deployed-service environment: ${bootstrap.mcp.remoteEnvironment.join(', ')}`,
     `- Transport: ${bootstrap.mcp.transport}`,
     `- Native remote MCP endpoint: ${bootstrap.mcp.nativeRemoteEndpoint}`,
-    '- Keep the agent token outside the repository and use HTTPS for non-loopback services.',
+    '- Use the same Nabu password for remote MCP, keep it outside the repository, and use HTTPS for non-loopback services.',
     '',
   ])
 

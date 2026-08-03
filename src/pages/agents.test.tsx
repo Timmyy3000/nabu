@@ -13,6 +13,8 @@ describe('renderAgentsMarkdown', () => {
     expect(markdown).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
     expect(markdown).toContain('Local command: `npm run mcp`')
     expect(markdown).toContain('NABU_MCP_MODE=remote')
+    expect(markdown).toContain('NABU_PASSWORD')
+    expect(markdown).not.toContain('NABU_AGENT_TOKEN')
     expect(markdown).not.toContain('PATCH /api/vault/notes/by-path')
     expect(markdown).not.toContain('<html')
   })

@@ -18,7 +18,7 @@ export type AgentBootstrapContract = {
   mcp: {
     localCommand: 'npm run mcp'
     directEnvironment: ['NABU_MCP_MODE=direct', 'KNOWLEDGE_PATH=<absolute-vault-path>']
-    remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_AGENT_TOKEN=<32-plus-character-token>']
+    remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_PASSWORD=<same-password-as-Nabu>']
     transport: 'stdio'
     nativeRemoteEndpoint: 'separate follow-up'
   }
@@ -43,7 +43,7 @@ export function getAgentBootstrapContract(): AgentBootstrapContract {
     mcp: {
       localCommand: 'npm run mcp',
       directEnvironment: ['NABU_MCP_MODE=direct', 'KNOWLEDGE_PATH=<absolute-vault-path>'],
-      remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_AGENT_TOKEN=<32-plus-character-token>'],
+      remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_PASSWORD=<same-password-as-Nabu>'],
       transport: 'stdio',
       nativeRemoteEndpoint: 'separate follow-up',
     },

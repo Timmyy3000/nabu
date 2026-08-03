@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { VaultStructuredNoteDocument } from '../vault/write-note'
 import { hashVaultNote } from '../vault/content-hash'
+import { deriveAgentCredential } from '../auth/agent-credential'
 
 export type NoteWriteInput = {
   path: string
@@ -129,7 +130,9 @@ export function getMcpModeFromEnvironment(env: NodeJS.ProcessEnv = process.env):
   return hasDirectConfig ? 'direct' : 'remote'
 }
 
-export function validateMcpEnvironment(env: NodeJS.ProcessEnv = process.env): { mode: 'direct'; rootPath: string } | { mode: 'remote'; baseUrl: URL; token: string } {
+export function validateMcpEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): { mode: 'direct'; rootPath: string } | { mode: 'remote'; baseUrl: URL; credential: string } {
   const mode = getMcpModeFromEnvironment(env)
 
   if (mode === 'direct') {
@@ -139,19 +142,15 @@ export function validateMcpEnvironment(env: NodeJS.ProcessEnv = process.env): { 
     }
   }
 
-  const token = env.NABU_AGENT_TOKEN?.trim()
-  if (!token) {
-    throw new McpConfigurationError('NABU_AGENT_TOKEN is required in remote MCP mode')
-  }
-
-  if (token.length < 32) {
-    throw new McpConfigurationError('NABU_AGENT_TOKEN must be at least 32 characters long')
+  const password = env.NABU_PASSWORD?.trim()
+  if (!password) {
+    throw new McpConfigurationError('NABU_PASSWORD is required in remote MCP mode')
   }
 
   return {
     mode,
     baseUrl: assertRemoteUrl(env.NABU_URL?.trim() ?? ''),
-    token,
+    credential: deriveAgentCredential(password),
   }
 }
 
@@ -316,12 +315,16 @@ function errorMessage(payload: unknown, status: number): string {
   return `Nabu API request failed with status ${status}`
 }
 
-export function createRemoteKnowledgeGateway(config: { baseUrl: URL; token: string; fetchFn?: typeof fetch }): KnowledgeGateway {
+export function createRemoteKnowledgeGateway(config: {
+  baseUrl: URL
+  credential: string
+  fetchFn?: typeof fetch
+}): KnowledgeGateway {
   const fetchFn = config.fetchFn ?? fetch
 
   async function request(route: string, init: RequestInit = {}): Promise<unknown> {
     const headers = new Headers(init.headers)
-    headers.set('Authorization', `Bearer ${config.token}`)
+    headers.set('Authorization', `Bearer ${config.credential}`)
     if (init.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json')
     }
