@@ -72,7 +72,7 @@ Nabu has two distinct kinds of runtime state and both need deliberate storage:
 - `KNOWLEDGE_PATH` — the Markdown vault and filesystem source of truth
 - `NABU_DATA_PATH` — application metadata such as shared-space leases, invite hashes, and scoped access-token hashes
 
-Production deployments must set `NABU_DATA_PATH` to an absolute path on persistent storage. Never rely on the app working directory (`/app/.nabu-data`) or a container-local fallback. The shipped container default is `/data/nabu/app-data`; the deployment must mount persistent storage there.
+Production deployments must set `NABU_DATA_PATH` to an absolute path on persistent storage. Never rely on the app working directory (`/app/.nabu-data`) or a container-local fallback. The deployment must explicitly mount persistent storage at the configured path; the image intentionally provides no production data-path default.
 
 The shared-space store is file-backed SQLite. Run one application replica per data directory. Move to a shared transactional database before enabling multiple application replicas or workers.
 
