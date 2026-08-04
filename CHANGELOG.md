@@ -4,6 +4,8 @@ All notable changes to Nabu will be documented in this file.
 
 ## Unreleased
 
+## [0.7.2] - 2026-08-04
+
 ### Fixed
 
 - Prevented production shared-space metadata from silently falling back to container-local storage.
