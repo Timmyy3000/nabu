@@ -65,7 +65,20 @@ The repo contains the engine, docs, and safe examples.
 
 Real user notes should live outside the repository and be mounted via configuration such as `KNOWLEDGE_PATH`.
 
-### 8. Test the boundaries
+### 8. Deployment persistence contract
+
+Nabu has two distinct kinds of runtime state and both need deliberate storage:
+
+- `KNOWLEDGE_PATH` — the Markdown vault and filesystem source of truth
+- `NABU_DATA_PATH` — application metadata such as shared-space leases, invite hashes, and scoped access-token hashes
+
+Production deployments must set `NABU_DATA_PATH` to an absolute path on persistent storage. Never rely on the app working directory (`/app/.nabu-data`) or a container-local fallback. The deployment must explicitly mount persistent storage at the configured path; the image intentionally provides no production data-path default.
+
+The shared-space store is file-backed SQLite. Run one application replica per data directory. Move to a shared transactional database before enabling multiple application replicas or workers.
+
+After every deployment, verify `GET /api/health` returns storage readiness and run a restart/replacement smoke test that proves a shared-space record and scoped token survive.
+
+### 9. Test the boundaries
 
 Pay extra attention to:
 - path traversal and filesystem safety

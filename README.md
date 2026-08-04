@@ -115,10 +115,11 @@ Real content should be mounted from a separate path, for example:
 
 ```bash
 KNOWLEDGE_PATH=/data/nabu/knowledge
+NABU_DATA_PATH=/data/nabu/app-data
 NABU_PASSWORD=***
 ```
 
-Mount `/data/nabu` (or another parent app-data directory) as persistent storage and let Nabu create `/knowledge` on first boot if it does not already exist.
+Mount `/data/nabu` (or another parent app-data directory) as persistent storage and let Nabu create `/knowledge` and `/app-data` on first boot if they do not already exist. Keep file-backed deployments at one application replica.
 
 Repo-safe demo content can live in `examples/`.
 

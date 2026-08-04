@@ -4,6 +4,12 @@ All notable changes to Nabu will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Prevented production shared-space metadata from silently falling back to container-local storage.
+- Added `/api/health` storage readiness checks, Docker health checks, and restart persistence coverage.
+- Documented the persistent `NABU_DATA_PATH` deployment contract and SQLite single-replica limit.
+
 ## [0.7.1] - 2026-08-02
 
 Agent contract release.
