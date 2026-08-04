@@ -467,9 +467,26 @@ function createStore(databasePath: string): SharedSpaceStore {
 let activeStore: SharedSpaceStore | null = null
 let activeDatabasePath: string | null = null
 
-export async function getSharedSpaceStore(): Promise<SharedSpaceStore> {
+export function resolveSharedSpaceDataPath(): string {
   const configuredPath = process.env.NABU_DATA_PATH?.trim()
-  const dataPath = path.resolve(process.cwd(), configuredPath || '.nabu-data')
+
+  if (!configuredPath) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('NABU_DATA_PATH is required in production')
+    }
+
+    return path.resolve(process.cwd(), '.nabu-data')
+  }
+
+  if (!path.isAbsolute(configuredPath)) {
+    throw new Error('NABU_DATA_PATH must be an absolute path')
+  }
+
+  return configuredPath
+}
+
+export async function getSharedSpaceStore(): Promise<SharedSpaceStore> {
+  const dataPath = resolveSharedSpaceDataPath()
   const databasePath = path.join(dataPath, SHARED_SPACE_DATABASE_FILENAME)
 
   if (activeStore && activeDatabasePath === databasePath) {

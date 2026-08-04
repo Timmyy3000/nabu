@@ -13,25 +13,21 @@ Your first job is **put the knowledge on persistent storage and make the app poi
 
 ## What Nabu needs
 
-Nabu needs exactly two runtime inputs:
+Nabu needs three runtime inputs for a production deployment:
 
 - `KNOWLEDGE_PATH` — absolute path to the mounted knowledge directory
+- `NABU_DATA_PATH` — absolute path to persistent application metadata
 - `NABU_PASSWORD` — password required to access the app
 
 Example:
 
 ```bash
 KNOWLEDGE_PATH=/data/nabu/knowledge
+NABU_DATA_PATH=/data/nabu/app-data
 NABU_PASSWORD="set-a-real-password-here"
 ```
 
-Optional shared-space metadata is stored durably outside the Markdown vault:
-
-```bash
-NABU_DATA_PATH=/data/nabu/app-data
-```
-
-Keep this directory on persistent storage. It contains lease metadata and
+Keep `NABU_DATA_PATH` on persistent storage. It contains lease metadata and
 token hashes, never raw invite or access-token secrets. Remote MCP derives its
 owner bearer credential from the same `NABU_PASSWORD`; no separate agent-token
 configuration is supported.
@@ -144,20 +140,23 @@ For most self-hosted installs, use this shape:
 
 - app checkout or image: ephemeral
 - knowledge directory: persistent
+- application metadata directory: persistent
 - reverse proxy: handles HTTPS
 - `KNOWLEDGE_PATH`: points at the persistent mounted directory
+- `NABU_DATA_PATH`: points at the persistent mounted application-data directory
 
 Recommended paths:
 
 ```text
 /opt/nabu            # app checkout or deployment workspace
 /data/nabu/knowledge # persistent markdown vault
+/data/nabu/app-data  # persistent shared-space metadata
 /data/nabu/backups   # optional backup output
 ```
 
 ## Container deployment: the right way
 
-If Nabu runs in a container, **mount the knowledge directory**.
+If Nabu runs in a container, **mount both the knowledge and application-data directories**.
 
 That mount can be either:
 - a bind mount to persistent server storage, or
@@ -165,7 +164,7 @@ That mount can be either:
 
 What matters is simple:
 
-**the mounted path must survive container replacement**
+**the mounted paths must survive container replacement**
 
 because that is where the real knowledge lives.
 
@@ -183,9 +182,11 @@ services:
       - "3000:3000"
     environment:
       KNOWLEDGE_PATH: /data/nabu/knowledge
+      NABU_DATA_PATH: /data/nabu/app-data
       NABU_PASSWORD: ${NABU_PASSWORD}
     volumes:
       - /data/nabu/knowledge:/data/nabu/knowledge
+      - /data/nabu/app-data:/data/nabu/app-data
 ```
 
 This is good because:
@@ -205,12 +206,15 @@ services:
       - "3000:3000"
     environment:
       KNOWLEDGE_PATH: /data/nabu/knowledge
+      NABU_DATA_PATH: /data/nabu/app-data
       NABU_PASSWORD: ${NABU_PASSWORD}
     volumes:
       - nabu_knowledge:/data/nabu/knowledge
+      - nabu_app_data:/data/nabu/app-data
 
 volumes:
   nabu_knowledge:
+  nabu_app_data:
 ```
 
 This is acceptable if the platform manages volume persistence correctly.
@@ -232,8 +236,10 @@ docker run -d \
   --restart unless-stopped \
   -p 3000:3000 \
   -e KNOWLEDGE_PATH=/data/nabu/knowledge \
+  -e NABU_DATA_PATH=/data/nabu/app-data \
   -e NABU_PASSWORD="set-a-real-password-here" \
   -v /data/nabu/knowledge:/data/nabu/knowledge \
+  -v /data/nabu/app-data:/data/nabu/app-data \
   nabu:local
 ```
 
@@ -270,6 +276,7 @@ Then run with environment variables:
 
 ```bash
 export KNOWLEDGE_PATH=/data/nabu/knowledge
+export NABU_DATA_PATH=/data/nabu/app-data
 export NABU_PASSWORD="set-a-real-password-here"
 node .output/server/index.mjs
 ```
@@ -278,6 +285,7 @@ Create the knowledge directory if needed:
 
 ```bash
 mkdir -p /data/nabu/knowledge
+mkdir -p /data/nabu/app-data
 ```
 
 ## Dokploy / source-build platforms
@@ -288,8 +296,11 @@ If the platform supports environment variables and persistent mounts, that is en
 On Dokploy-like platforms, make sure you configure:
 
 - `KNOWLEDGE_PATH=/data/nabu/knowledge`
+- `NABU_DATA_PATH=/data/nabu/app-data`
 - `NABU_PASSWORD=<set-a-real-password-here>`
-- a persistent mount for `/data/nabu/knowledge`
+- persistent mounts for `/data/nabu/knowledge` and `/data/nabu/app-data`
+- one application replica while metadata is file-backed SQLite
+- a post-deploy `GET /api/health` check returning `{ "status": "ok" }`
 
 If the platform builds from repo source, point it at this repo directly.
 If the platform expects a Docker image, build and publish the included `Dockerfile` first.
@@ -365,12 +376,13 @@ What matters:
 
 ## Backups
 
-Back up the knowledge directory, not just the app.
+Back up the knowledge and application metadata directories, not just the app.
 
 Minimum sane backup target:
 
 ```text
 /data/nabu/knowledge
+/data/nabu/app-data
 ```
 
 Recommended backup habits:
@@ -396,6 +408,8 @@ Before calling setup complete, verify all of this:
 - creating or editing a note writes back to the mounted knowledge directory
 - container/server restart does not lose notes
 - mounted path is actually persistent
+- `/api/health` reports storage readiness
+- a shared-space invite and scoped access token survive an app restart
 - `/agents.md` is reachable after auth
 
 ## Agent handoff checklist

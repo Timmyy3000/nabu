@@ -62,10 +62,13 @@ The agent-facing lifecycle is:
 4. `POST /api/shared-spaces/:id/revoke` or lease expiry invalidates all access
    synchronously; cleanup is optional and asynchronous.
 
-Shared-space metadata lives in durable server-side SQLite at
-`NABU_DATA_PATH/shared-spaces.sqlite` (default `.nabu-data`), outside the
-Markdown vault. Only SHA-256 hashes of invite and access-token secrets are
-stored. Raw secrets are returned only at creation/redemption time.
+Shared-space metadata lives in server-side SQLite at
+`NABU_DATA_PATH/shared-spaces.sqlite`, outside the Markdown vault. Production
+must configure `NABU_DATA_PATH` as an absolute path on persistent storage;
+there is no production fallback to the app working directory. Only SHA-256
+hashes of invite and access-token secrets are stored. Raw secrets are returned
+only at creation/redemption time. File-backed deployments are single-replica;
+multiple replicas require a shared transactional database.
 
 The owner/password and password-derived bearer authentication contract uses the
 same `NABU_PASSWORD` for human sessions and remote MCP. Shared bearer tokens
