@@ -22,7 +22,6 @@ describe('MCP stdio entrypoint', () => {
     delete environment.NABU_MCP_MODE
     delete environment.KNOWLEDGE_PATH
     delete environment.NABU_URL
-    delete environment.NABU_AGENT_TOKEN
 
     const child = startProcess(environment)
     const stderrPromise = once(child.stderr!, 'data')
@@ -51,6 +50,24 @@ describe('MCP stdio entrypoint', () => {
       child.kill()
       await once(child, 'exit').catch(() => undefined)
       await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('starts remote stdio MCP with the Nabu password and URL only', async () => {
+    const child = startProcess({
+      ...process.env,
+      NABU_MCP_MODE: 'remote',
+      NABU_URL: 'http://localhost:3000',
+      NABU_PASSWORD: 'test-password',
+      KNOWLEDGE_PATH: undefined,
+    })
+
+    try {
+      const [stderr] = await once(child.stderr!, 'data')
+      expect(String(stderr)).toContain('Nabu MCP server starting in remote mode')
+    } finally {
+      child.kill()
+      await once(child, 'exit').catch(() => undefined)
     }
   })
 })

@@ -32,8 +32,9 @@ NABU_DATA_PATH=/data/nabu/app-data
 ```
 
 Keep this directory on persistent storage. It contains lease metadata and
-token hashes, never raw invite or access-token secrets. Existing password
-sessions and `NABU_AGENT_TOKEN` clients remain valid without an auth migration.
+token hashes, never raw invite or access-token secrets. Remote MCP derives its
+owner bearer credential from the same `NABU_PASSWORD`; no separate agent-token
+configuration is supported.
 
 ## Local MCP access
 
@@ -68,9 +69,10 @@ MCP client launches from the Nabu checkout containing `package.json`.
 
 ### Remote deployed-Nabu mode
 
-Use this when Nabu is running on a VPS or another host. Create a long random
-`NABU_AGENT_TOKEN` on the deployed service, configure the same token in the
-local MCP client, and use HTTPS for non-loopback URLs.
+Use this when Nabu is running on a VPS or another host. Configure the same
+`NABU_PASSWORD` in the local MCP client that is set on the deployed service.
+The local MCP process derives the bearer credential internally, so no separate
+agent token is needed. Use HTTPS for non-loopback URLs.
 
 ```json
 {
@@ -81,17 +83,18 @@ local MCP client, and use HTTPS for non-loopback URLs.
       "env": {
         "NABU_MCP_MODE": "remote",
         "NABU_URL": "https://nabu.example.com",
-        "NABU_AGENT_TOKEN": "replace-with-a-32-plus-character-random-token"
+        "NABU_PASSWORD": "same-password-as-the-deployed-nabu"
       }
     }
   }
 }
 ```
 
-The first implementation exposes traversal, search, note resources, and note
+The MCP process exposes traversal, search, note resources, and note
 create/update/move/delete operations through stdio. A native remote `/mcp`
 endpoint with OAuth, Origin validation, and deployment-specific proxy guidance
-is intentionally a separate follow-up.
+is intentionally a separate follow-up. Remote MCP clients using the removed
+separate agent-token configuration must be reconfigured with `NABU_PASSWORD`.
 
 ## The non-negotiables
 

@@ -13,6 +13,8 @@ describe('renderAgentsMarkdown', () => {
     expect(markdown).toContain('Use `rawMarkdown`, not top-level `body` or `content`.')
     expect(markdown).toContain('Local command: npm run mcp')
     expect(markdown).toContain('NABU_MCP_MODE=remote')
+    expect(markdown).toContain('NABU_PASSWORD')
+    expect(markdown).not.toContain('NABU_AGENT_TOKEN')
     expect(markdown).toContain('PATCH /api/vault/notes/by-path')
     expect(markdown).toContain('The JSON field is exactly `inviteUrl`')
     expect(markdown).toContain('410 SHARED_SPACE_INVITE_INVALID')

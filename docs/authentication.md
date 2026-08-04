@@ -1,9 +1,10 @@
 # Nabu authentication and shared-space security
 
-Nabu keeps its existing password/session authentication contract. A password
-login creates the signed `nabu_session` cookie, and a configured
-`NABU_AGENT_TOKEN` remains a valid owner bearer credential. Existing agents do
-not need to change credentials or perform a setup migration.
+Nabu uses one password for human sessions and remote MCP. A password login
+creates the signed `nabu_session` cookie, while remote MCP derives the owner
+bearer credential from that same `NABU_PASSWORD`. There is no separate agent
+token configuration; clients using the removed configuration must be
+reconfigured with the Nabu password.
 
 ## Shared-space credentials
 

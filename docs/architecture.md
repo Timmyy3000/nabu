@@ -67,10 +67,10 @@ Shared-space metadata lives in durable server-side SQLite at
 Markdown vault. Only SHA-256 hashes of invite and access-token secrets are
 stored. Raw secrets are returned only at creation/redemption time.
 
-The owner/password and existing `NABU_AGENT_TOKEN` authentication contract is
-backwards compatible. Shared bearer tokens resolve to a scoped principal, and
-the same authorization service is applied before every vault read, search,
-graph/link projection, listing, and mutation.
+The owner/password and password-derived bearer authentication contract uses the
+same `NABU_PASSWORD` for human sessions and remote MCP. Shared bearer tokens
+resolve to a scoped principal, and the same authorization service is applied
+before every vault read, search, graph/link projection, listing, and mutation.
 
 ## Revision-aware writes
 

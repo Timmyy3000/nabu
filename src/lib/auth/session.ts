@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { AUTH_COOKIE_NAME } from './constants'
+import { deriveAgentCredential } from './agent-credential'
 
 export { AUTH_COOKIE_NAME }
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
@@ -17,11 +18,6 @@ function getConfiguredPassword(): string {
   }
 
   return password
-}
-
-function getConfiguredAgentToken(): string | null {
-  const token = process.env.NABU_AGENT_TOKEN?.trim()
-  return token || null
 }
 
 function encodeBase64Url(value: string): string {
@@ -156,15 +152,23 @@ export function isAuthenticatedRequest(request: Request, nowMs: number = Date.no
 }
 
 export function isAgentAuthenticatedRequest(request: Request): boolean {
-  const configuredToken = getConfiguredAgentToken()
   const authorization = request.headers.get('authorization')
 
-  if (!configuredToken || !authorization) {
+  if (!authorization) {
     return false
   }
 
   const match = /^Bearer (.+)$/i.exec(authorization.trim())
-  return match ? safeCompare(match[1], configuredToken) : false
+
+  if (!match) {
+    return false
+  }
+
+  try {
+    return safeCompare(match[1], deriveAgentCredential(getConfiguredPassword()))
+  } catch {
+    return false
+  }
 }
 
 export function requireAuthenticatedApiRequest(request: Request, nowMs: number = Date.now()): Response | null {
