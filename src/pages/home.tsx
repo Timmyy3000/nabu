@@ -1,7 +1,7 @@
 import { Link, useBlocker, useNavigate, useRouter } from '@tanstack/react-router'
 import type { FormEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { VaultNoteLink } from '../lib/vault/parse-note'
 import type {
@@ -21,11 +21,18 @@ function getParentFolderPath(relPath: string): string {
   return parts.slice(0, -1).join('/')
 }
 
-function buildNoteHref(relPath: string, slug: string): string {
+function withShareToken<T extends Record<string, unknown>>(search: T, shareToken = ''): T & { token?: string } {
+  return shareToken ? { ...search, token: shareToken } : search
+}
+
+function buildNoteHref(relPath: string, slug: string, shareToken = ''): string {
   const params = new URLSearchParams({
     folder: getParentFolderPath(relPath),
     note: slug,
   })
+  if (shareToken) {
+    params.set('token', shareToken)
+  }
 
   return `/?${params.toString()}`
 }
@@ -53,19 +60,67 @@ function stripLeadingHeading(body: string, title: string): string {
   return match[2].trimStart()
 }
 
-function toRenderedMarkdown(body: string, outgoingLinks: VaultNoteLink[], title: string): string {
-  let nextBody = stripLeadingHeading(body, title)
+function rewriteWikiEmbeds(body: string): string {
+  return body.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, alt: string | undefined) => {
+    const label = (alt ?? target).trim()
+    return `![${label}](<${target.trim()}>)`
+  })
+}
+
+function toRenderedMarkdown(body: string, outgoingLinks: VaultNoteLink[], title: string, shareToken = ''): string {
+  let nextBody = rewriteWikiEmbeds(stripLeadingHeading(body, title))
 
   for (const link of outgoingLinks) {
-    if (!link.resolved || !link.targetRelPath || !link.targetSlug) {
+    if (link.inaccessible || !link.resolved || !link.targetRelPath || !link.targetSlug) {
       continue
     }
 
-    const replacement = `[${getResolvedLinkLabel(link)}](${buildNoteHref(link.targetRelPath, link.targetSlug)})`
+    const replacement = `[${getResolvedLinkLabel(link)}](${buildNoteHref(link.targetRelPath, link.targetSlug, shareToken)})`
     nextBody = nextBody.split(link.raw).join(replacement)
   }
 
   return nextBody
+}
+
+function resolveRelativeVaultPath(noteRelPath: string, target: string): string | null {
+  const trimmed = target.trim()
+  if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return null
+  }
+
+  const pathOnly = (trimmed.split('#')[0] ?? trimmed).split('?')[0] ?? trimmed
+  const sourceParts = noteRelPath.split('/').filter(Boolean).slice(0, -1)
+  const targetParts = (pathOnly.startsWith('/') ? pathOnly.slice(1) : [...sourceParts, pathOnly].join('/')).split('/')
+  const normalized: string[] = []
+
+  for (const segment of targetParts) {
+    if (!segment || segment === '.') {
+      continue
+    }
+    if (segment === '..') {
+      if (normalized.length === 0) {
+        return null
+      }
+      normalized.pop()
+      continue
+    }
+    normalized.push(segment)
+  }
+
+  return normalized.length > 0 ? normalized.join('/') : null
+}
+
+function buildAssetHref(noteRelPath: string, target: string, shareToken = ''): string | null {
+  const relPath = resolveRelativeVaultPath(noteRelPath, target)
+  if (!relPath) {
+    return null
+  }
+
+  const params = new URLSearchParams({ path: relPath })
+  if (shareToken) {
+    params.set('token', shareToken)
+  }
+  return `/api/vault/assets?${params.toString()}`
 }
 
 function formatDate(value: string | null): string | null {
@@ -117,24 +172,24 @@ function editorStatusLabel(state: EditorSaveState, dirty: boolean): string {
   return dirty ? 'unsaved' : 'saved'
 }
 
-function buildTagSearchState(folderPath: string, selectedNoteSlug: string | null, tag: string) {
-  return {
+function buildTagSearchState(folderPath: string, selectedNoteSlug: string | null, tag: string, shareToken = '') {
+  return withShareToken({
     folder: folderPath,
     note: selectedNoteSlug ?? '',
     q: '',
     searchPath: folderPath,
     searchTag: tag,
-  }
+  }, shareToken)
 }
 
-function renderTagChip(tag: string, browse: VaultBrowseData, activeTag: string, key: string) {
+function renderTagChip(tag: string, browse: VaultBrowseData, activeTag: string, key: string, shareToken = '') {
   const isActive = activeTag === tag
 
   return (
     <Link
       key={key}
       to="/"
-      search={() => buildTagSearchState(browse.folder.path, browse.selectedNoteSlug, tag)}
+      search={() => buildTagSearchState(browse.folder.path, browse.selectedNoteSlug, tag, shareToken)}
       className={isActive ? 'tag-chip is-active' : 'tag-chip'}
     >
       #{tag}
@@ -195,7 +250,7 @@ function getOutgoingLinkLabel(link: VaultNoteNeighborhood['outgoing'][number]): 
   return link.text || link.targetTitle || link.targetSlug
 }
 
-function BacklinkList({ links }: { links: VaultBacklink[] }) {
+function BacklinkList({ links, shareToken = '' }: { links: VaultBacklink[]; shareToken?: string }) {
   if (links.length === 0) {
     return <p className="empty-copy">none</p>
   }
@@ -204,7 +259,10 @@ function BacklinkList({ links }: { links: VaultBacklink[] }) {
     <ul className="drawer-list">
       {links.map((link) => (
         <li key={`${link.sourceRelPath}:${link.raw}`}>
-          <Link to="/" search={() => ({ folder: getParentFolderPath(link.sourceRelPath), note: link.sourceSlug, q: '', searchPath: '', searchTag: '' })}>
+          <Link
+            to="/"
+            search={() => withShareToken({ folder: getParentFolderPath(link.sourceRelPath), note: link.sourceSlug, q: '', searchPath: '', searchTag: '' }, shareToken)}
+          >
             {link.sourceTitle}
           </Link>
           <p className="meta-inline">{link.sourceRelPath}</p>
@@ -218,10 +276,12 @@ function DetailsDrawer({
   browse,
   neighborhood,
   open,
+  shareToken = '',
 }: {
   browse: VaultBrowseData
   neighborhood: VaultNoteNeighborhood | null
   open: boolean
+  shareToken?: string
 }) {
   if (!browse.note) {
     return null
@@ -263,7 +323,7 @@ function DetailsDrawer({
 
       <section className="drawer-section">
         <p className="section-label">linked from</p>
-        <BacklinkList links={neighborhood?.backlinks ?? browse.note.backlinks} />
+        <BacklinkList links={neighborhood?.backlinks ?? browse.note.backlinks} shareToken={shareToken} />
       </section>
 
       <section className="drawer-section">
@@ -271,7 +331,10 @@ function DetailsDrawer({
         <ul className="drawer-list">
           {(neighborhood?.outgoing ?? []).map((link) => (
             <li key={`${link.targetRelPath}:${link.raw}`}>
-              <Link to="/" search={() => ({ folder: getParentFolderPath(link.targetRelPath), note: link.targetSlug, q: '', searchPath: '', searchTag: '' })}>
+              <Link
+                to="/"
+                search={() => withShareToken({ folder: getParentFolderPath(link.targetRelPath), note: link.targetSlug, q: '', searchPath: '', searchTag: '' }, shareToken)}
+              >
                 {getOutgoingLinkLabel(link)}
               </Link>
               <p className="meta-inline">{link.targetRelPath}</p>
@@ -288,7 +351,7 @@ function DetailsDrawer({
           <ul className="drawer-list">
             {neighborhood.unresolvedOutgoing.map((link) => (
               <li key={`${link.kind}:${link.raw}`}>
-                <code>{link.raw}</code>
+                {link.inaccessible ? <span className="inaccessible-link">{link.text ?? 'Non-accessible link'}</span> : <code>{link.raw}</code>}
               </li>
             ))}
           </ul>
@@ -300,7 +363,10 @@ function DetailsDrawer({
         <ul className="drawer-list">
           {(neighborhood?.relatedNotes ?? []).map((note) => (
             <li key={note.relPath}>
-              <Link to="/" search={() => ({ folder: getParentFolderPath(note.relPath), note: note.slug, q: '', searchPath: '', searchTag: '' })}>
+              <Link
+                to="/"
+                search={() => withShareToken({ folder: getParentFolderPath(note.relPath), note: note.slug, q: '', searchPath: '', searchTag: '' }, shareToken)}
+              >
                 {note.title}
               </Link>
               <p className="meta-inline">
@@ -332,14 +398,17 @@ export function HomePage({
   search,
   searchPathInput,
   searchTagInput,
+  shareToken = '',
 }: {
   browse: VaultBrowseData
   search: VaultSearchResponse | null
   searchPathInput: string
   searchTagInput: string
+  shareToken?: string
 }) {
   const folderTitle = browse.folder.path || 'root'
   const searchActive = search?.normalizedQuery ? true : false
+  const readOnly = Boolean(shareToken)
   const router = useRouter()
   const navigate = useNavigate()
   const [detailsOpenFor, setDetailsOpenFor] = useState<string | null>(null)
@@ -352,7 +421,7 @@ export function HomePage({
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
 
-  const editing = browse.note ? editingNotePath === browse.note.relPath : false
+  const editing = !readOnly && browse.note ? editingNotePath === browse.note.relPath : false
   const editorDirty = editing ? editorValue !== editorBaseValue : false
 
   const exitEditing = useCallback(() => {
@@ -468,13 +537,14 @@ export function HomePage({
 
     void navigate({
       to: '/',
-      search: {
-        folder: getValue('folder'),
-        note: getValue('note'),
-        q: getValue('q'),
-        searchPath: getValue('searchPath'),
-        searchTag: getValue('searchTag'),
-      },
+        search: {
+          folder: getValue('folder'),
+          note: getValue('note'),
+          q: getValue('q'),
+          searchPath: getValue('searchPath'),
+          searchTag: getValue('searchTag'),
+          ...(shareToken ? { token: shareToken } : {}),
+        },
     })
   }
 
@@ -537,8 +607,28 @@ export function HomePage({
       return ''
     }
 
-    return toRenderedMarkdown(browse.note.body, browse.note.outgoingLinks, browse.note.title)
-  }, [browse.note])
+    return toRenderedMarkdown(browse.note.body, browse.note.outgoingLinks, browse.note.title, shareToken)
+  }, [browse.note, shareToken])
+
+  const markdownComponents = useMemo<Components>(() => ({
+    a: ({ node, children, href, ...props }) => {
+      void node
+      if (href?.startsWith('#nabu-inaccessible')) {
+        return <span className="inaccessible-link">Non-accessible link</span>
+      }
+
+      return <a {...props} href={href}>{children}</a>
+    },
+    img: ({ node, alt, src, ...props }) => {
+      void node
+      const assetHref = src ? buildAssetHref(browse.note?.relPath ?? '', src, shareToken) : null
+      if (shareToken && src && !assetHref) {
+        return <span className="inaccessible-link">{alt || 'Non-accessible image'}</span>
+      }
+
+      return <img {...props} src={assetHref ?? src} alt={alt ?? ''} loading="lazy" />
+    },
+  }), [browse.note?.relPath, shareToken])
 
   const activeTag = search?.tag ?? searchTagInput
   const detailsOpen = browse.note ? detailsOpenFor === browse.note.relPath : false
@@ -552,7 +642,7 @@ export function HomePage({
       <li key={node.path || 'root'}>
         <Link
           to="/"
-          search={() => ({ ...buildTagSearchState(node.path, '', ''), q: '', searchPath: '', searchTag: '' })}
+          search={() => withShareToken({ ...buildTagSearchState(node.path, '', ''), q: '', searchPath: '', searchTag: '' }, shareToken)}
           className={node.path === browse.folder.path ? 'tree-row is-active' : 'tree-row'}
           style={{ paddingLeft: `${6 + depth * 14}px` }}
         >
@@ -574,7 +664,7 @@ export function HomePage({
             <span className="wordmark-text">nabu</span>
           </div>
           <a href="/logout" className="spine-logout">
-            logout
+            {readOnly ? 'read-only share' : 'logout'}
           </a>
         </header>
 
@@ -582,6 +672,12 @@ export function HomePage({
           <span className="scope-key">scope</span>
           <span className="scope-val">/{browse.folder.path || ''}</span>
         </div>
+
+        {readOnly ? (
+          <div className="shared-read-only-banner" role="status">
+            read-only shared space
+          </div>
+        ) : null}
 
         <form method="get" action="/" className="spine-search" onSubmit={handleSearchSubmit}>
           <label htmlFor="vault-search-input" className="sr-only">
@@ -612,6 +708,7 @@ export function HomePage({
 
           <input type="hidden" name="folder" value={browse.folder.path} />
           <input type="hidden" name="note" value={browse.selectedNoteSlug ?? ''} />
+          {shareToken ? <input type="hidden" name="token" value={shareToken} /> : null}
 
           <div className="search-actions">
             <button type="submit" className="ui-button">
@@ -621,12 +718,13 @@ export function HomePage({
               <Link
                 to="/"
                 className="text-button"
-                search={(prev) => ({
-                  ...prev,
+                search={() => withShareToken({
+                  folder: browse.folder.path,
+                  note: browse.selectedNoteSlug ?? '',
                   q: '',
                   searchPath: '',
                   searchTag: '',
-                })}
+                }, shareToken)}
               >
                 clear
               </Link>
@@ -657,21 +755,20 @@ export function HomePage({
                 <Link
                   to="/"
                   className="note-card-title"
-                  search={(prev) => ({
-                    ...prev,
+                  search={() => withShareToken({
                     folder: getParentFolderPath(result.relPath),
                     note: result.slug,
                     q: '',
                     searchPath: '',
                     searchTag: '',
-                  })}
+                  }, shareToken)}
                 >
                   {result.title}
                 </Link>
                 <p className="note-card-meta">{result.relPath}</p>
                 <p className="note-card-summary">{result.snippet}</p>
                 <div className="tag-row">
-                  {result.tags.map((tag) => renderTagChip(tag, browse, activeTag, `${result.id}:${tag}`))}
+                  {result.tags.map((tag) => renderTagChip(tag, browse, activeTag, `${result.id}:${tag}`, shareToken))}
                 </div>
                 <p className="note-card-meta">{result.reasons.join(', ')}</p>
               </li>
@@ -684,11 +781,13 @@ export function HomePage({
                 <Link
                   to="/"
                   className="note-card-title"
-                  search={(prev) => ({
-                    ...prev,
+                  search={() => withShareToken({
                     folder: browse.folder.path,
                     note: note.slug,
-                  })}
+                    q: '',
+                    searchPath: '',
+                    searchTag: '',
+                  }, shareToken)}
                 >
                   {note.title}
                 </Link>
@@ -697,7 +796,7 @@ export function HomePage({
                 </p>
                 {note.summary ? <p className="note-card-summary">{note.summary}</p> : null}
                 <div className="tag-row">
-                  {note.tags.map((tag) => renderTagChip(tag, browse, activeTag, `${note.id}:${tag}`))}
+                  {note.tags.map((tag) => renderTagChip(tag, browse, activeTag, `${note.id}:${tag}`, shareToken))}
                 </div>
               </li>
             ))}
@@ -736,7 +835,7 @@ export function HomePage({
                     {[browse.note.authors.join(', '), noteDate, noteReadTime].filter(Boolean).join(' · ')}
                   </p>
                   <div className="tag-row">
-                    {browse.note.tags.map((tag) => renderTagChip(tag, browse, activeTag, `reader:${tag}`))}
+                    {browse.note.tags.map((tag) => renderTagChip(tag, browse, activeTag, `reader:${tag}`, shareToken))}
                   </div>
                   {browse.note.summary ? <div className="tldr-card">{browse.note.summary}</div> : null}
                 </header>
@@ -751,7 +850,7 @@ export function HomePage({
                   >
                     {browse.note.relPath}
                   </button>
-                  {!editing ? (
+                  {!editing && !readOnly ? (
                     <button type="button" className="ui-button" aria-label="Edit note" onClick={enterEditing}>
                       edit
                     </button>
@@ -802,12 +901,12 @@ export function HomePage({
                   </section>
                 ) : (
                   <div className="note-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderedMarkdown}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{renderedMarkdown}</ReactMarkdown>
                   </div>
                 )}
               </div>
 
-              {!editing ? <DetailsDrawer browse={browse} neighborhood={browse.noteNeighborhood} open={detailsOpen} /> : null}
+              {!editing ? <DetailsDrawer browse={browse} neighborhood={browse.noteNeighborhood} open={detailsOpen} shareToken={shareToken} /> : null}
             </div>
           </>
         ) : (

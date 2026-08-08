@@ -11,6 +11,7 @@ import {
   __resetSharedSpaceServiceForTests,
 } from './service'
 import { hashSecret } from './crypto'
+import { getSharedSpaceStore } from './store'
 
 const originalKnowledgePath = process.env.KNOWLEDGE_PATH
 const originalDataPath = process.env.NABU_DATA_PATH
@@ -217,5 +218,66 @@ describe('shared-space service', () => {
     const accessToken = await service.getAccessTokenForTest(hashSecret(redeemed.accessToken))
     expect(extended.sharedSpaceExpiresAt).toBe(new Date(1_000 + 14 * 24 * 60 * 60 * 1_000).toISOString())
     expect(accessToken?.expiresAt).toBe(Date.parse(extended.sharedSpaceExpiresAt))
+  })
+
+  it('issues a hashed, read-only URL with an effective parent-clamped expiry and rotates it', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      durationDays: 1,
+    })
+
+    const first = await service.issueReadLink({
+      ownerPrincipalId: 'owner',
+      sharedSpaceId: confirmed.sharedSpaceId,
+      durationDays: 183,
+    })
+    const firstUrl = new URL(first.shareUrl)
+    const firstSecret = firstUrl.searchParams.get('token')
+    expect(first).toMatchObject({
+      sharedSpaceId: confirmed.sharedSpaceId,
+      rootPath: 'little-helpers',
+      permission: 'read',
+      durationDays: 183,
+      expiresAt: confirmed.sharedSpaceExpiresAt,
+    })
+    expect(firstUrl.pathname).toBe('/')
+    expect(firstUrl.searchParams.get('path')).toBe('little-helpers')
+    expect(firstSecret).toEqual(expect.any(String))
+    const stored = await service.getReadLinkForTest(confirmed.sharedSpaceId)
+    expect(stored?.tokenHash).toBe(hashSecret(firstSecret!))
+    expect(stored?.tokenHash).not.toContain(firstSecret!)
+
+    const second = await service.issueReadLink({
+      ownerPrincipalId: 'owner',
+      sharedSpaceId: confirmed.sharedSpaceId,
+      durationDays: 7,
+    })
+    const secondSecret = new URL(second.shareUrl).searchParams.get('token')!
+    const store = await getSharedSpaceStore()
+    expect(store.findReadLink(hashSecret(firstSecret!), 1_000)).toBeNull()
+    expect(store.findReadLink(hashSecret(secondSecret), 1_000)).toMatchObject({
+      sharedSpaceId: confirmed.sharedSpaceId,
+      expiresAt: Date.parse(confirmed.sharedSpaceExpiresAt),
+    })
+  })
+
+  it('revokes a read link without revoking the shared space and is idempotent', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000 })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+    const link = await service.issueReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })
+
+    await expect(service.revokeReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })).resolves.toBeUndefined()
+    await expect(service.revokeReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })).resolves.toBeUndefined()
+    const stored = await service.getReadLinkForTest(confirmed.sharedSpaceId)
+    expect(stored?.revokedAt).toBe(1_000)
+    expect((await service.getSharedSpace({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })).revokedAt).toBeNull()
+    expect((await getSharedSpaceStore()).findReadLink(hashSecret(new URL(link.shareUrl).searchParams.get('token')!), 1_000)).toBeNull()
   })
 })

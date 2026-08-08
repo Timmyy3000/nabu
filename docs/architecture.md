@@ -59,16 +59,25 @@ The agent-facing lifecycle is:
    1-hour, one-time invite.
 3. `POST /api/shared-spaces/invites/redeem` atomically exchanges the invite for
    a scoped bearer access token.
-4. `POST /api/shared-spaces/:id/revoke` or lease expiry invalidates all access
+4. `POST /api/shared-spaces/:id/read-link` issues one active read-only browser
+   URL per space; issuing another rotates the previous URL, and `DELETE` on the
+   same route revokes it.
+5. `POST /api/shared-spaces/:id/revoke` or lease expiry invalidates all access
    synchronously; cleanup is optional and asynchronous.
 
 Shared-space metadata lives in server-side SQLite at
 `NABU_DATA_PATH/shared-spaces.sqlite`, outside the Markdown vault. Production
 must configure `NABU_DATA_PATH` as an absolute path on persistent storage;
 there is no production fallback to the app working directory. Only SHA-256
-hashes of invite and access-token secrets are stored. Raw secrets are returned
-only at creation/redemption time. File-backed deployments are single-replica;
+hashes of invite, access-token, and read-link secrets are stored. Raw secrets
+are returned only at creation/redemption/issue time. File-backed deployments are single-replica;
 multiple replicas require a shared transactional database.
+
+Read-link URLs use `/?path=<root>&token=<opaque-secret>` and grant anonymous
+read-only access to the linked root and descendants through the browser and
+read APIs. They are capped at 183 days and cannot outlive the parent lease.
+Token-bearing responses are private and non-cacheable, and outside-scope paths,
+links, and assets return generic unavailable responses.
 
 The owner/password and password-derived bearer authentication contract uses the
 same `NABU_PASSWORD` for human sessions and remote MCP. Shared bearer tokens
