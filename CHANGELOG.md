@@ -4,6 +4,8 @@ All notable changes to Nabu will be documented in this file.
 
 ## Unreleased
 
+## [0.7.3] - 2026-08-08
+
 ### Added
 
 - Added owner-authenticated, rotatable read-only URL tokens for shared spaces,
