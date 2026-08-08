@@ -3,7 +3,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { getVaultBrowseData, searchVaultNotes } from '../lib/vault/service'
 import { HomePage } from '../pages/home'
 
-const getAuthStatus = createServerFn({ method: 'POST' })
+const getAuthStatus = createServerFn({ method: 'GET' })
   .inputValidator((input: { token: string }) => input)
   .handler(async ({ data }) => {
   const { getRequest } = await import('@tanstack/react-start/server')
@@ -24,7 +24,7 @@ const getAuthStatus = createServerFn({ method: 'POST' })
   }
 })
 
-const loadVaultBrowse = createServerFn({ method: 'POST' })
+const loadVaultBrowse = createServerFn({ method: 'GET' })
   .inputValidator((input: { folder: string; note: string; token: string }) => input)
   .handler(async ({ data }) => {
     const { getRequest } = await import('@tanstack/react-start/server')
@@ -56,7 +56,7 @@ const loadVaultBrowse = createServerFn({ method: 'POST' })
     }
   })
 
-const loadVaultSearch = createServerFn({ method: 'POST' })
+const loadVaultSearch = createServerFn({ method: 'GET' })
   .inputValidator((input: { q: string; searchPath: string; searchTag: string; token: string }) => input)
   .handler(async ({ data }) => {
     const { getRequest } = await import('@tanstack/react-start/server')
