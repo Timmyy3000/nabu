@@ -25,11 +25,6 @@ function responseHeaders(principal: VaultPrincipal, contentType?: string): Heade
   }
   headers.set('X-Content-Type-Options', 'nosniff')
 
-  if (isPublicReadLinkPrincipal(principal)) {
-    headers.set('Cache-Control', 'private, no-store')
-    headers.set('Referrer-Policy', 'no-referrer')
-  }
-
   return headers
 }
 
