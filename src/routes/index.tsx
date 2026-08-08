@@ -141,18 +141,6 @@ export const Route = createFileRoute('/')({
     token: search.token ?? '',
   }),
   loader: async ({ deps }) => {
-    const auth = await getAuthStatus({ data: { token: deps.token } })
-    if (!auth.authenticated) {
-      return {
-        browse: null,
-        search: null,
-        searchPathInput: deps.searchPath,
-        searchTagInput: deps.searchTag,
-        shareToken: deps.token,
-        unavailable: true,
-      }
-    }
-
     const [browse, search] = await Promise.all([
       loadVaultBrowse({
         data: {
