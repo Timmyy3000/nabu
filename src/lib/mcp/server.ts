@@ -49,7 +49,7 @@ const moveSchema = z.object({
 
 const permissionsSchema = z.array(z.enum(['read', 'write'])).min(1).max(2).optional()
 const sharedSpaceIdSchema = z.string().trim().min(1).max(256)
-const sharedSpaceDurationSchema = z.number().int().min(1).max(30).optional()
+const sharedSpaceDurationSchema = z.number().int().min(1).max(183).optional()
 
 function asResourcePath(value: string | string[] | undefined): string {
   const encodedPath = Array.isArray(value) ? value.join('/') : value ?? ''
@@ -317,8 +317,8 @@ function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
     'extend_shared_space',
     {
       title: 'Extend shared space',
-      description: 'Explicitly extend an active lease within the 30-day maximum.',
-      inputSchema: z.object({ sharedSpaceId: sharedSpaceIdSchema, durationDays: z.number().int().min(1).max(30), confirmed: z.boolean() }),
+      description: 'Explicitly extend an active lease within the 183-day maximum.',
+      inputSchema: z.object({ sharedSpaceId: sharedSpaceIdSchema, durationDays: z.number().int().min(1).max(183), confirmed: z.boolean() }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     (input) => callGateway(() => gateway.extendSharedSpace(input)),

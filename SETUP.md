@@ -409,7 +409,7 @@ Before calling setup complete, verify all of this:
 - container/server restart does not lose notes
 - mounted path is actually persistent
 - `/api/health` reports storage readiness
-- a shared-space invite and scoped access token survive an app restart
+- a shared-space invite, scoped access token, and read-link metadata survive an app restart
 - `/agents.md` is reachable after auth
 
 ## Agent handoff checklist

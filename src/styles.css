@@ -252,6 +252,19 @@ pre,
   padding: 0 8px;
 }
 
+.shared-read-only-banner {
+  margin: 14px 8px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--rule-soft));
+  border-radius: var(--rad);
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .scope-key {
   color: var(--ink-faint);
   font-size: 11px;
@@ -590,6 +603,14 @@ pre,
   justify-content: space-between;
   gap: 12px;
   margin: 20px 0 0;
+}
+
+.inaccessible-link {
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 0.9em;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ink-faint);
 }
 
 .path-button {

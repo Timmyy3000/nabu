@@ -44,6 +44,7 @@ Current direction:
 - `/agents.md` agent-facing entrypoint with explicit read/write API contract
 - Authenticated folder creation and markdown note create/update by path
 - Temporary live-recursive shared spaces with one-time invite redemption
+- Rotatable, time-limited read-only browser URLs for shared spaces
 - Revision-aware note writes with a backwards-compatible owner migration path
 
 ## Open-source model

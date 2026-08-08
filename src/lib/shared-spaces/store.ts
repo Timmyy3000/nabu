@@ -7,6 +7,7 @@ import type {
   SharedSpaceInviteRecord,
   SharedSpacePermission,
   SharedSpaceProposalRecord,
+  SharedSpaceReadLinkRecord,
   SharedSpaceRecord,
 } from './types'
 
@@ -19,6 +20,10 @@ type ProposalInput = Omit<SharedSpaceProposalRecord, 'consumedAt'>
 type SpaceInput = SharedSpaceRecord
 type InviteInput = SharedSpaceInviteRecord
 type AccessTokenInput = SharedSpaceAccessTokenRecord
+type ReadLinkInput = Pick<
+  SharedSpaceReadLinkRecord,
+  'id' | 'sharedSpaceId' | 'tokenHash' | 'createdAt' | 'expiresAt' | 'revokedAt'
+>
 
 export type SharedSpaceStore = {
   createProposal: (proposal: ProposalInput) => void
@@ -45,6 +50,10 @@ export type SharedSpaceStore = {
   revokeSpace: (id: string, now: number) => boolean
   extendSpace: (id: string, expiresAt: number) => SharedSpaceRecord | null
   getAccessTokenForTest: (tokenHash: string) => SharedSpaceAccessTokenRecord | null
+  rotateReadLink: (input: ReadLinkInput) => SharedSpaceReadLinkRecord
+  findReadLink: (tokenHash: string, now: number) => SharedSpaceReadLinkRecord | null
+  revokeReadLink: (sharedSpaceId: string, now: number) => boolean
+  getReadLinkForTest: (sharedSpaceId: string) => SharedSpaceReadLinkRecord | null
   close: () => void
 }
 
@@ -132,6 +141,20 @@ function mapAccessToken(row: SqlRow): SharedSpaceAccessTokenRecord {
   }
 }
 
+function mapReadLink(row: SqlRow): SharedSpaceReadLinkRecord {
+  return {
+    id: asString(row.id),
+    sharedSpaceId: asString(row.shared_space_id),
+    tokenHash: asString(row.token_hash),
+    createdAt: asNumber(row.created_at),
+    expiresAt: asNumber(row.expires_at),
+    revokedAt: asNullableNumber(row.revoked_at),
+    rootPath: asString(row.root_path),
+    sharedSpaceExpiresAt: asNumber(row.space_expires_at),
+    sharedSpaceRevokedAt: asNullableNumber(row.space_revoked_at),
+  }
+}
+
 function changedRows(result: { changes: bigint | number }): number {
   return typeof result.changes === 'bigint' ? Number(result.changes) : result.changes
 }
@@ -191,8 +214,17 @@ function createStore(databasePath: string): SharedSpaceStore {
       revoked_at INTEGER,
       last_used_at INTEGER
     );
+    CREATE TABLE IF NOT EXISTS shared_space_read_links (
+      id TEXT PRIMARY KEY,
+      shared_space_id TEXT NOT NULL UNIQUE REFERENCES shared_spaces(id),
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      revoked_at INTEGER
+    );
     CREATE INDEX IF NOT EXISTS idx_shared_space_invites_hash ON shared_space_invites(token_hash);
     CREATE INDEX IF NOT EXISTS idx_shared_space_access_tokens_hash ON shared_space_access_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS idx_shared_space_read_links_hash ON shared_space_read_links(token_hash);
     CREATE INDEX IF NOT EXISTS idx_shared_spaces_owner ON shared_spaces(owner_principal_id);
   `)
 
@@ -456,6 +488,87 @@ function createStore(databasePath: string): SharedSpaceStore {
         WHERE tokens.token_hash = ?
       `).get(tokenHash) as SqlRow | undefined
       return row ? mapAccessToken(row) : null
+    },
+
+    rotateReadLink(input) {
+      return withTransaction(db, () => {
+        db.prepare(`
+          INSERT INTO shared_space_read_links
+            (id, shared_space_id, token_hash, created_at, expires_at, revoked_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(shared_space_id) DO UPDATE SET
+            id = excluded.id,
+            token_hash = excluded.token_hash,
+            created_at = excluded.created_at,
+            expires_at = excluded.expires_at,
+            revoked_at = excluded.revoked_at
+        `).run(
+          input.id,
+          input.sharedSpaceId,
+          input.tokenHash,
+          input.createdAt,
+          input.expiresAt,
+          input.revokedAt,
+        )
+
+        const row = db.prepare(`
+          SELECT
+            links.*,
+            spaces.root_path,
+            spaces.expires_at AS space_expires_at,
+            spaces.revoked_at AS space_revoked_at
+          FROM shared_space_read_links AS links
+          JOIN shared_spaces AS spaces ON spaces.id = links.shared_space_id
+          WHERE links.shared_space_id = ?
+        `).get(input.sharedSpaceId) as SqlRow | undefined
+        if (!row) {
+          throw new Error('Read-link rotation did not persist')
+        }
+        return mapReadLink(row)
+      })
+    },
+
+    findReadLink(tokenHash, now) {
+      const row = db.prepare(`
+        SELECT
+          links.*,
+          spaces.root_path,
+          spaces.expires_at AS space_expires_at,
+          spaces.revoked_at AS space_revoked_at
+        FROM shared_space_read_links AS links
+        JOIN shared_spaces AS spaces ON spaces.id = links.shared_space_id
+        WHERE links.token_hash = ?
+      `).get(tokenHash) as SqlRow | undefined
+      if (!row) {
+        return null
+      }
+
+      const link = mapReadLink(row)
+      if (link.revokedAt != null || link.expiresAt <= now || link.sharedSpaceExpiresAt <= now || link.sharedSpaceRevokedAt != null) {
+        return null
+      }
+      return link
+    },
+
+    revokeReadLink(sharedSpaceId, now) {
+      const result = db.prepare(
+        'UPDATE shared_space_read_links SET revoked_at = COALESCE(revoked_at, ?) WHERE shared_space_id = ?',
+      ).run(now, sharedSpaceId)
+      return changedRows(result) === 1
+    },
+
+    getReadLinkForTest(sharedSpaceId) {
+      const row = db.prepare(`
+        SELECT
+          links.*,
+          spaces.root_path,
+          spaces.expires_at AS space_expires_at,
+          spaces.revoked_at AS space_revoked_at
+        FROM shared_space_read_links AS links
+        JOIN shared_spaces AS spaces ON spaces.id = links.shared_space_id
+        WHERE links.shared_space_id = ?
+      `).get(sharedSpaceId) as SqlRow | undefined
+      return row ? mapReadLink(row) : null
     },
 
     close() {

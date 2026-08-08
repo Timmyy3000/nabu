@@ -7,10 +7,12 @@ import { SharedSpaceService, __resetSharedSpaceServiceForTests } from '../shared
 import { hashVaultRawMarkdown } from './content-hash'
 import {
   createVaultNote,
+  getVaultBrowseData,
   getVaultNoteByPathResponse,
   getVaultNoteNeighborhoodResponse,
   getVaultFolderListingResponse,
   getVaultTreeResponse,
+  searchVaultNotes,
   updateVaultNoteByPathResponse,
   __resetVaultServiceForTests,
 } from './service'
@@ -37,7 +39,10 @@ async function fixture() {
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), 'nabu-shared-data-'))
   roots.push(vaultRoot, dataRoot)
   await mkdir(path.join(vaultRoot, 'little-helpers'), { recursive: true })
-  await writeFile(path.join(vaultRoot, 'little-helpers', 'shared.md'), '# Shared\n\n[[private.md]]')
+  await writeFile(
+    path.join(vaultRoot, 'little-helpers', 'shared.md'),
+    '---\nsummary: Public summary\ntags: [shared]\nauthors: [Nabu]\nprivateMetadata: do-not-share\nsource: private.md\nreferences:\n  - private.md\n---\n# Shared\n\n**Author:** Nabu\n\n**Source:** private.md\n\n**References:** [[private.md]]\n\n[[private.md]]\n\n[Secret file](../private.txt)\n\n![Private image](../private.png)',
+  )
   await writeFile(path.join(vaultRoot, 'private.md'), '# Private\n\n[[little-helpers/shared.md]]')
   process.env.KNOWLEDGE_PATH = vaultRoot
   process.env.NABU_DATA_PATH = dataRoot
@@ -61,6 +66,21 @@ async function sharedPrincipal(permissions: ['read'] | ['read', 'write'] = ['rea
     new Request('http://localhost:3000', { headers: { authorization: `Bearer ${redeemed.accessToken}` } }),
     1_000,
   )
+}
+
+async function publicReadLinkPrincipal() {
+  const bearerPrincipal = await sharedPrincipal()
+  if (!bearerPrincipal || bearerPrincipal.kind !== 'shared') {
+    throw new Error('Expected a shared principal')
+  }
+  const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'http://localhost:3000' })
+  const readLink = await service.issueReadLink({
+    ownerPrincipalId: 'owner',
+    sharedSpaceId: bearerPrincipal.sharedSpaceId,
+    durationDays: 7,
+  })
+  const principal = await resolveVaultPrincipal(new Request(readLink.shareUrl), 1_000)
+  return { principal, readLink }
 }
 
 describe('shared vault access', () => {
@@ -88,6 +108,44 @@ describe('shared vault access', () => {
     expect(JSON.stringify(await liveFolder.json())).toContain('nested.md')
   })
 
+  it('projects public read links without private metadata and marks private links as inaccessible', async () => {
+    await fixture()
+    const { principal } = await publicReadLinkPrincipal()
+    expect(principal?.principalId).toMatch(/^read-link:/)
+
+    const read = await getVaultNoteByPathResponse('little-helpers/shared.md', principal ?? undefined)
+    const payload = await read.json()
+    const serialized = JSON.stringify(payload)
+
+    expect(read.status).toBe(200)
+    expect(read.headers.get('cache-control')).toBe('private, no-store')
+    expect(read.headers.get('referrer-policy')).toBe('no-referrer')
+    expect(payload.note.body).toContain('Non-accessible link')
+    expect(payload.note.outgoingLinks).toHaveLength(3)
+    expect(payload.note.outgoingLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          inaccessible: true,
+          text: 'Non-accessible link',
+          targetRelPath: null,
+        }),
+      ]),
+    )
+    expect(serialized).not.toContain('private.md')
+    expect(serialized).not.toContain('private.txt')
+    expect(serialized).not.toContain('private.png')
+    expect(payload.note.frontmatter).toEqual({})
+    expect(payload.note.references).toEqual([])
+    expect(payload.note.summary).toBe('Public summary')
+    expect(payload.note.tags).toEqual(['shared'])
+    expect(payload.note.authors).toEqual(['Nabu'])
+    expect(serialized).not.toContain('do-not-share')
+
+    const outside = await getVaultNoteByPathResponse('private.md', principal ?? undefined)
+    expect(outside.status).toBe(404)
+    expect(await outside.json()).toEqual({ error: 'Shared space unavailable' })
+  })
+
   it('returns a machine-readable migration warning for legacy owner writes', async () => {
     await fixture()
     const response = await updateVaultNoteByPathResponse({
@@ -101,6 +159,23 @@ describe('shared vault access', () => {
       nextAction: expect.stringContaining('expectedRevision'),
     })
     expect(response.headers.get('etag')).toBe(`"${hashVaultRawMarkdown('# Updated')}"`)
+  })
+
+  it('rejects malformed public browse and search paths without falling back to the shared root', async () => {
+    await fixture()
+    const { principal } = await publicReadLinkPrincipal()
+
+    await expect(getVaultBrowseData({
+      folderPath: '../private',
+      noteSlug: '',
+      principal: principal ?? undefined,
+    })).rejects.toThrow('The requested vault resource is not available.')
+
+    await expect(searchVaultNotes({
+      query: 'private',
+      path: '../private',
+      principal: principal ?? undefined,
+    })).rejects.toThrow('The requested vault resource is not available.')
   })
 
   it('requires and validates revisions for shared-token updates', async () => {
@@ -190,6 +265,23 @@ describe('shared vault access', () => {
       principal: principal ?? undefined,
     })
     expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({
+      error: 'The requested vault resource is not available.',
+    })
+  })
+
+  it('adds privacy headers to public read-link write denials', async () => {
+    await fixture()
+    const { principal } = await publicReadLinkPrincipal()
+    const response = await updateVaultNoteByPathResponse({
+      path: 'little-helpers/shared.md',
+      rawMarkdown: '# Not allowed',
+      principal: principal ?? undefined,
+    })
+
+    expect(response.status).toBe(403)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer')
     expect(await response.json()).toEqual({
       error: 'The requested vault resource is not available.',
     })

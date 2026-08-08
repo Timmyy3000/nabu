@@ -12,6 +12,7 @@ import {
 } from './authorization'
 import { hashSecret } from '../shared-spaces/crypto'
 import { SharedSpaceService, __resetSharedSpaceServiceForTests } from '../shared-spaces/service'
+import { AUTH_COOKIE_NAME, createSessionToken } from './session'
 
 const originalKnowledgePath = process.env.KNOWLEDGE_PATH
 const originalDataPath = process.env.NABU_DATA_PATH
@@ -79,5 +80,59 @@ describe('vault authorization', () => {
     expect(response?.status).toBe(404)
     expect(await response?.json()).toEqual({ error: 'The requested vault resource is not available.' })
     expect(toVaultAuthorizationResponse(new Error('unrelated failure'))).toBeNull()
+  })
+
+  it('resolves a URL read link as read-only and never lets it broaden bearer or owner access', async () => {
+    await fixture()
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'http://localhost:3000' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      permissions: ['read', 'write'],
+    })
+    const link = await service.issueReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })
+    const tokenRequest = new Request(link.shareUrl)
+    expect(await resolveVaultPrincipal(tokenRequest, 1_000)).toMatchObject({
+      kind: 'shared',
+      permissions: ['read'],
+      rootPath: 'little-helpers',
+      sharedSpaceId: confirmed.sharedSpaceId,
+    })
+
+    const redeemed = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl })
+    const bearerPrincipal = await resolveVaultPrincipal(
+      new Request(link.shareUrl, { headers: { authorization: `Bearer ${redeemed.accessToken}` } }),
+      1_000,
+    )
+    expect(bearerPrincipal).toMatchObject({ kind: 'shared', permissions: ['read', 'write'] })
+
+    const ownerPrincipal = await resolveVaultPrincipal(
+      new Request(link.shareUrl, { headers: { cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(createSessionToken(1_000))}` } }),
+      1_000,
+    )
+    expect(ownerPrincipal).toEqual(OWNER_VAULT_PRINCIPAL)
+  })
+
+  it('rejects malformed, rotated, expired, and parent-revoked URL read links', async () => {
+    await fixture()
+    let now = 1_000
+    const service = new SharedSpaceService({ now: () => now, baseUrl: 'http://localhost:3000' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+    const first = await service.issueReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId, durationDays: 1 })
+    const second = await service.issueReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId, durationDays: 1 })
+
+    expect(await resolveVaultPrincipal(new Request(first.shareUrl), now)).toBeNull()
+    expect(await resolveVaultPrincipal(new Request('http://localhost:3000/?path=little-helpers&token=malformed'), now)).toBeNull()
+
+    now = Date.parse(second.expiresAt) + 1
+    expect(await resolveVaultPrincipal(new Request(second.shareUrl), now)).toBeNull()
+
+    now = 1_000
+    const third = await service.issueReadLink({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })
+    await service.revokeSharedSpace({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })
+    expect(await resolveVaultPrincipal(new Request(third.shareUrl), now)).toBeNull()
   })
 })

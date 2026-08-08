@@ -83,6 +83,23 @@ describe('Nabu MCP server', () => {
     expect(result.structuredContent).toEqual({ query: 'agent', results: [{ relPath: 'ideas/agent.md' }] })
   })
 
+  it('accepts the six-month shared-space duration cap and rejects longer leases', async () => {
+    const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()), AUTO_NEGOTIATION)
+    connectedServer = pair.server
+
+    const maximum = await pair.client.callTool({
+      name: 'propose_shared_space',
+      arguments: { path: 'ideas', durationDays: 183 },
+    })
+    expect(maximum.isError).not.toBe(true)
+
+    const tooLong = await pair.client.callTool({
+      name: 'propose_shared_space',
+      arguments: { path: 'ideas', durationDays: 184 },
+    })
+    expect(tooLong.isError).toBe(true)
+  })
+
   it('rejects compare-and-swap hashes on create_note', async () => {
     const pair = await connectTestPair(createNabuMcpServer(createFakeGateway()), AUTO_NEGOTIATION)
     connectedServer = pair.server

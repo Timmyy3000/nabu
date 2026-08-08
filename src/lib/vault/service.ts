@@ -1,6 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { OWNER_VAULT_PRINCIPAL, assertVaultPathAccess, VaultAuthorizationError, type VaultPrincipal } from '../auth/authorization'
+import {
+  isPublicReadLinkPrincipal,
+  OWNER_VAULT_PRINCIPAL,
+  assertVaultPathAccess,
+  vaultPrincipalHeaders,
+  VaultAuthorizationError,
+  type VaultPrincipal,
+} from '../auth/authorization'
 import { normalizeVaultPath } from '../paths'
 import { hashVaultNote, hashVaultRawMarkdown } from './content-hash'
 import { getVaultConfig } from './config'
@@ -38,6 +45,8 @@ import type {
   VaultNoteNeighborhood,
   VaultRelatedReason,
 } from './types'
+
+export type { VaultBacklink, VaultFolderTreeNode } from './types'
 
 type LoadedVaultIndex = VaultIndex & {
   builtAt: string
@@ -248,6 +257,190 @@ function isPathInPrincipalScope(principal: VaultPrincipal, relPath: string): boo
   return principal.kind === 'owner' || relPath === principal.rootPath || relPath.startsWith(`${principal.rootPath}/`)
 }
 
+const PUBLIC_INACCESSIBLE_LINK_TARGET = '#nabu-inaccessible'
+const PUBLIC_INACCESSIBLE_LINK_LABEL = 'Non-accessible link'
+const PUBLIC_SHARED_SPACE_UNAVAILABLE = 'Shared space unavailable'
+
+function publicReadHeaders(principal: VaultPrincipal, headers?: HeadersInit): Headers {
+  return vaultPrincipalHeaders(principal, headers)
+}
+
+function publicUnavailableResponse(principal: VaultPrincipal, status = 404): Response {
+  return Response.json(
+    { error: isPublicReadLinkPrincipal(principal) ? PUBLIC_SHARED_SPACE_UNAVAILABLE : 'The requested vault resource is not available.' },
+    { status, headers: publicReadHeaders(principal) },
+  )
+}
+
+function mutationResponse(principal: VaultPrincipal, body: unknown, init: ResponseInit = {}): Response {
+  return Response.json(body, {
+    ...init,
+    headers: publicReadHeaders(principal, init.headers),
+  })
+}
+
+function stripLinkExtras(target: string): string {
+  const withoutHash = target.split('#')[0] ?? target
+  return (withoutHash.split('?')[0] ?? withoutHash).trim()
+}
+
+function parseMarkdownTarget(target: string): string {
+  const trimmed = target.trim()
+  if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+    return trimmed.slice(1, -1).trim()
+  }
+
+  const whitespaceIndex = trimmed.search(/\s/)
+  return whitespaceIndex === -1 ? trimmed : trimmed.slice(0, whitespaceIndex).trim()
+}
+
+function candidateLinkPath(noteRelPath: string, kind: 'wiki' | 'markdown', target: string): string | null {
+  const strippedTarget = stripLinkExtras(target)
+  if (!strippedTarget || strippedTarget.startsWith('#') || strippedTarget.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(strippedTarget)) {
+    return null
+  }
+
+  const pathTarget = kind === 'wiki'
+    ? strippedTarget.startsWith('/')
+      ? strippedTarget.slice(1)
+      : strippedTarget
+    : strippedTarget.startsWith('/')
+      ? strippedTarget.slice(1)
+      : path.posix.normalize(path.posix.join(path.posix.dirname(noteRelPath), strippedTarget))
+
+  try {
+    return normalizeVaultPath(pathTarget)
+  } catch {
+    return '__outside_scope__'
+  }
+}
+
+function collectPublicInaccessibleLinks(note: ParsedVaultNote, principal: VaultPrincipal): VaultNoteLink[] {
+  const inaccessible = new Map<string, VaultNoteLink>()
+
+  const add = (raw: string, link: VaultNoteLink) => {
+    if (!raw || inaccessible.has(raw)) {
+      return
+    }
+
+    inaccessible.set(raw, {
+      ...link,
+      raw,
+      text: PUBLIC_INACCESSIBLE_LINK_LABEL,
+      target: PUBLIC_INACCESSIBLE_LINK_TARGET,
+      resolved: false,
+      targetRelPath: null,
+      targetSlug: null,
+      targetTitle: undefined,
+      inaccessible: true,
+    })
+  }
+
+  for (const link of note.outgoingLinks) {
+    const targetPath = link.resolved && link.targetRelPath
+      ? link.targetRelPath
+      : candidateLinkPath(note.relPath, link.kind, link.target)
+
+    if (targetPath && !isPathInPrincipalScope(principal, targetPath)) {
+      if (note.body.includes(`!${link.raw}`)) {
+        add(`!${link.raw}`, link)
+      } else {
+        add(link.raw, link)
+      }
+    }
+  }
+
+  const markdownLinkRegex = /!?\[[^\]]*\]\(([^)]+)\)/g
+  for (const match of note.body.matchAll(markdownLinkRegex)) {
+    const raw = match[0] ?? ''
+    const target = parseMarkdownTarget(match[1] ?? '')
+    const targetPath = candidateLinkPath(note.relPath, 'markdown', target)
+    if (raw && targetPath && !isPathInPrincipalScope(principal, targetPath)) {
+      add(raw, {
+        raw,
+        kind: 'markdown',
+        text: null,
+        target,
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      })
+    }
+  }
+
+  const wikiLinkRegex = /!?\[\[([^\]]+)\]\]/g
+  for (const match of note.body.matchAll(wikiLinkRegex)) {
+    const raw = match[0] ?? ''
+    const rawTarget = (match[1] ?? '').trim()
+    const aliasSeparatorIndex = rawTarget.indexOf('|')
+    const target = (aliasSeparatorIndex === -1 ? rawTarget : rawTarget.slice(0, aliasSeparatorIndex)).trim()
+    const targetPath = candidateLinkPath(note.relPath, 'wiki', target)
+    if (raw && targetPath && !isPathInPrincipalScope(principal, targetPath)) {
+      const original = note.outgoingLinks.find((link) => link.raw === raw || link.raw === raw.slice(1))
+      add(raw, original ?? {
+        raw,
+        kind: 'wiki',
+        text: null,
+        target,
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      })
+    }
+  }
+
+  return [...inaccessible.values()]
+}
+
+function createPublicScopedNote(note: ParsedVaultNote, principal: VaultPrincipal): ParsedVaultNote {
+  const inaccessibleLinks = collectPublicInaccessibleLinks(note, principal)
+  const replacements = inaccessibleLinks
+    .map((link, index) => ({
+      raw: link.raw,
+      replacement: `[${PUBLIC_INACCESSIBLE_LINK_LABEL}](#${PUBLIC_INACCESSIBLE_LINK_TARGET.slice(1)}-${index + 1})`,
+    }))
+  const replacementOrder = [...replacements].sort((left, right) => right.raw.length - left.raw.length)
+
+  let body = note.body.replace(/^\s*\*\*(?:Source|References):\*\*.*(?:\r?\n|$)/gim, '')
+  for (const replacement of replacementOrder) {
+    body = body.split(replacement.raw).join(replacement.replacement)
+  }
+
+  const parsed = parseNote({ relPath: note.relPath, rawMarkdown: body })
+  // Keep the public projection explicit so new ParsedVaultNote metadata cannot
+  // become visible merely by being added to the parser or payload type.
+  const publicMetadata = {
+    title: note.title,
+    slug: note.slug,
+    summary: note.summary,
+    tags: [...note.tags],
+    authors: [...note.authors],
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+  }
+  parsed.title = publicMetadata.title
+  parsed.slug = publicMetadata.slug
+  parsed.summary = publicMetadata.summary
+  parsed.tags = publicMetadata.tags
+  parsed.authors = publicMetadata.authors
+  parsed.source = null
+  parsed.references = []
+  parsed.createdAt = publicMetadata.createdAt
+  parsed.updatedAt = publicMetadata.updatedAt
+  parsed.frontmatter = {}
+  parsed.body = body
+  parsed.rawMarkdown = body
+  parsed.warnings = note.warnings
+  parsed.outgoingLinks.push(
+    ...inaccessibleLinks.map((link, index) => ({
+      ...link,
+      raw: replacements[index]?.replacement ?? `[${PUBLIC_INACCESSIBLE_LINK_LABEL}](#nabu-inaccessible)`,
+    })),
+  )
+
+  return parsed
+}
+
 function createScopedIndex(index: LoadedVaultIndex, principal: VaultPrincipal): LoadedVaultIndex {
   if (principal.kind === 'owner') {
     return index
@@ -256,6 +449,10 @@ function createScopedIndex(index: LoadedVaultIndex, principal: VaultPrincipal): 
   const scopedNotes = index.notes
     .filter((note) => isPathInPrincipalScope(principal, note.relPath))
     .map((note) => {
+      if (isPublicReadLinkPrincipal(principal)) {
+        return createPublicScopedNote(note, principal)
+      }
+
       const visibleLinkRaws = new Set(
         note.outgoingLinks
           .filter((link) => !link.resolved || (link.targetRelPath != null && isPathInPrincipalScope(principal, link.targetRelPath)))
@@ -809,10 +1006,18 @@ export async function getVaultBrowseData(input: {
       throw error
     }
 
+    if (isPublicReadLinkPrincipal(principal)) {
+      throw new VaultAuthorizationError('The requested vault resource is not available.')
+    }
+
     folderPath = principal.kind === 'shared' ? principal.rootPath : ''
   }
 
   if (folderPath && !index.folderSet.has(folderPath)) {
+    if (principal.kind === 'shared') {
+      throw new VaultAuthorizationError('The requested vault resource is not available.')
+    }
+
     folderPath = ''
   }
 
@@ -1129,7 +1334,16 @@ export async function searchVaultNotes(input: VaultSearchInput): Promise<VaultSe
   }
 
   const principal = getPrincipal(input.principal)
-  const normalizedPath = normalizeSearchPath(input.path)
+  let normalizedPath: string
+  try {
+    normalizedPath = normalizeSearchPath(input.path)
+  } catch (error) {
+    if (isPublicReadLinkPrincipal(principal)) {
+      throw new VaultAuthorizationError('The requested vault resource is not available.')
+    }
+
+    throw error
+  }
   const scopedSearchPath = principal.kind === 'shared' && !normalizedPath ? principal.rootPath : normalizedPath
   assertVaultPathAccess(principal, scopedSearchPath)
   const normalizedTag = normalizeSearchTag(input.tag)
@@ -1156,6 +1370,7 @@ export async function getVaultSearchResponse(input: {
   offset: string | null | undefined
   principal?: VaultPrincipal
 }): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   const rawQuery = input.query ?? ''
   const normalizedQuery = normalizeSearchQuery(rawQuery).normalizedQuery
 
@@ -1164,7 +1379,7 @@ export async function getVaultSearchResponse(input: {
       {
         error: 'Search query is required',
       },
-      { status: 400 },
+      { status: 400, headers: publicReadHeaders(principal) },
     )
   }
 
@@ -1172,6 +1387,10 @@ export async function getVaultSearchResponse(input: {
   try {
     normalizedPath = normalizeSearchPath(input.path)
   } catch {
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
+    }
+
     return Response.json(
       {
         error: 'Invalid folder path',
@@ -1196,20 +1415,21 @@ export async function getVaultSearchResponse(input: {
     })
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return publicUnavailableResponse(principal, error.status)
     }
     throw error
   }
-  const index = await getVaultIndexForPrincipal(getPrincipal(input.principal))
+  const index = await getVaultIndexForPrincipal(principal)
 
   return Response.json({
     builtAt: index.builtAt,
     ...result,
-  })
+  }, { headers: publicReadHeaders(principal) })
 }
 
 export async function getVaultIndexResponse(principalInput?: VaultPrincipal): Promise<Response> {
-  const index = await getVaultIndexForPrincipal(getPrincipal(principalInput))
+  const principal = getPrincipal(principalInput)
+  const index = await getVaultIndexForPrincipal(principal)
 
   return Response.json({
     builtAt: index.builtAt,
@@ -1217,17 +1437,18 @@ export async function getVaultIndexResponse(principalInput?: VaultPrincipal): Pr
     warnings: index.warnings,
     folders: index.folders,
     notes: index.notes.map(toSummaryNote),
-  })
+  }, { headers: publicReadHeaders(principal) })
 }
 
 export async function getVaultIndexStatsResponse(principalInput?: VaultPrincipal): Promise<Response> {
-  const index = await getVaultIndexForPrincipal(getPrincipal(principalInput))
+  const principal = getPrincipal(principalInput)
+  const index = await getVaultIndexForPrincipal(principal)
 
   return Response.json({
     builtAt: index.builtAt,
     stats: index.stats,
     warnings: index.warnings,
-  })
+  }, { headers: publicReadHeaders(principal) })
 }
 
 export async function getVaultTreeResponse(principalInput?: VaultPrincipal): Promise<Response> {
@@ -1238,7 +1459,7 @@ export async function getVaultTreeResponse(principalInput?: VaultPrincipal): Pro
   return Response.json({
     builtAt: index.builtAt,
     tree: buildFolderTreeNode(principal.kind === 'shared' ? principal.rootPath : '', folderChildren, folderNotes),
-  })
+  }, { headers: publicReadHeaders(principal) })
 }
 
 function requiresWriteRevision(principal: VaultPrincipal): boolean {
@@ -1309,13 +1530,18 @@ export async function getVaultFolderListingResponse(
   folderPath: string | null | undefined,
   principalInput?: VaultPrincipal,
 ): Promise<Response> {
+  const principal = getPrincipal(principalInput)
   let normalizedPath: string
 
   try {
-    normalizedPath = normalizeScopedFolderPathInput(folderPath, getPrincipal(principalInput))
+    normalizedPath = normalizeScopedFolderPathInput(folderPath, principal)
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return publicUnavailableResponse(principal, error.status)
+    }
+
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
     }
 
     return Response.json(
@@ -1327,10 +1553,13 @@ export async function getVaultFolderListingResponse(
     )
   }
 
-  const principal = getPrincipal(principalInput)
   const index = await getVaultIndexForPrincipal(principal)
 
   if (normalizedPath && !index.folderSet.has(normalizedPath)) {
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
+    }
+
     return Response.json(
       {
         error: 'Folder not found',
@@ -1345,13 +1574,18 @@ export async function getVaultFolderListingResponse(
   return Response.json({
     builtAt: index.builtAt,
     folder: buildFolderListing(normalizedPath, folderChildren, folderNotes),
-  })
+  }, { headers: publicReadHeaders(principal) })
 }
 
 export async function getVaultNoteBySlugResponse(slug: string, principalInput?: VaultPrincipal): Promise<Response> {
-  const found = await getNoteBySlug(slug, principalInput)
+  const principal = getPrincipal(principalInput)
+  const found = await getNoteBySlug(slug, principal)
 
   if (!found) {
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
+    }
+
     return Response.json(
       {
         error: 'Note not found',
@@ -1361,18 +1595,23 @@ export async function getVaultNoteBySlugResponse(slug: string, principalInput?: 
     )
   }
 
-  return Response.json(found, { headers: { ETag: `"${found.note.revision}"` } })
+  return Response.json(found, { headers: publicReadHeaders(principal, { ETag: `"${found.note.revision}"` }) })
 }
 
 export async function getVaultNoteByPathResponse(
   pathInput: string | null | undefined,
   principalInput?: VaultPrincipal,
 ): Promise<Response> {
+  const principal = getPrincipal(principalInput)
   let normalizedPath: string
 
   try {
     normalizedPath = normalizeNotePathInput(pathInput)
   } catch {
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
+    }
+
     return Response.json(
       {
         error: 'Invalid note path',
@@ -1383,9 +1622,13 @@ export async function getVaultNoteByPathResponse(
   }
 
   try {
-    const found = await getNoteByPath(normalizedPath, principalInput)
+    const found = await getNoteByPath(normalizedPath, principal)
 
     if (!found) {
+      if (isPublicReadLinkPrincipal(principal)) {
+        return publicUnavailableResponse(principal)
+      }
+
       return Response.json(
         {
           error: 'Note not found',
@@ -1395,10 +1638,10 @@ export async function getVaultNoteByPathResponse(
       )
     }
 
-    return Response.json(found, { headers: { ETag: `"${found.note.revision}"` } })
+    return Response.json(found, { headers: publicReadHeaders(principal, { ETag: `"${found.note.revision}"` }) })
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return publicUnavailableResponse(principal, error.status)
     }
 
     throw error
@@ -1409,11 +1652,16 @@ export async function getVaultNoteNeighborhoodResponse(
   pathInput: string | null | undefined,
   principalInput?: VaultPrincipal,
 ): Promise<Response> {
+  const principal = getPrincipal(principalInput)
   let normalizedPath: string
 
   try {
     normalizedPath = normalizeNotePathInput(pathInput)
   } catch {
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
+    }
+
     return Response.json(
       {
         error: 'Invalid note path',
@@ -1423,12 +1671,11 @@ export async function getVaultNoteNeighborhoodResponse(
     )
   }
 
-  const principal = getPrincipal(principalInput)
   try {
     assertVaultPathAccess(principal, normalizedPath)
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return publicUnavailableResponse(principal, error.status)
     }
     throw error
   }
@@ -1437,6 +1684,10 @@ export async function getVaultNoteNeighborhoodResponse(
   const note = index.byRelPath.get(normalizedPath)
 
   if (!note) {
+    if (isPublicReadLinkPrincipal(principal)) {
+      return publicUnavailableResponse(principal)
+    }
+
     return Response.json(
       {
         error: 'Note not found',
@@ -1449,23 +1700,25 @@ export async function getVaultNoteNeighborhoodResponse(
   return Response.json({
     builtAt: index.builtAt,
     ...getNoteNeighborhood(index, note),
-  })
+  }, { headers: publicReadHeaders(principal) })
 }
 
 export async function createVaultFolderResponse(input: {
   path: string | null | undefined
   principal?: VaultPrincipal
 }): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   let created: VaultFolderCreateResult
 
   try {
     created = await createVaultFolder(input.path ?? '', input.principal)
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return mutationResponse(principal, { error: 'The requested vault resource is not available.' }, { status: error.status })
     }
 
-    return Response.json(
+    return mutationResponse(
+      principal,
       {
         error: 'Invalid folder path',
         path: input.path ?? '',
@@ -1474,7 +1727,8 @@ export async function createVaultFolderResponse(input: {
     )
   }
 
-  return Response.json(
+  return mutationResponse(
+    principal,
     {
       builtAt: created.builtAt,
       folder: {
@@ -1487,16 +1741,18 @@ export async function createVaultFolderResponse(input: {
 }
 
 export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   try {
     const created = await createVaultNote(input)
-    return Response.json(created, { status: 201, headers: { ETag: `"${created.note.revision}"` } })
+    return mutationResponse(principal, created, { status: 201, headers: { ETag: `"${created.note.revision}"` } })
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return mutationResponse(principal, { error: 'The requested vault resource is not available.' }, { status: error.status })
     }
 
     if (error instanceof Error && error.message === 'Invalid note write payload') {
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Invalid request body',
         },
@@ -1506,7 +1762,8 @@ export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promi
 
     if (error instanceof Error && error.message.startsWith('Note already exists: ')) {
       const notePath = error.message.replace('Note already exists: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Note already exists',
           path: notePath,
@@ -1515,7 +1772,8 @@ export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promi
       )
     }
 
-    return Response.json(
+    return mutationResponse(
+      principal,
       {
         error: 'Invalid note path',
         path: input.path ?? '',
@@ -1526,9 +1784,10 @@ export async function createVaultNoteResponse(input: VaultNoteWriteInput): Promi
 }
 
 export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   try {
     const updated = await updateVaultNote(input)
-    return Response.json(updated, { headers: { ETag: `"${updated.note.revision}"` } })
+    return mutationResponse(principal, updated, { headers: { ETag: `"${updated.note.revision}"` } })
   } catch (error) {
     if (error instanceof VaultWriteRevisionError) {
       const body = {
@@ -1538,18 +1797,19 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
         readUrl: error.readUrl,
         ...(error.currentRevision ? { currentRevision: error.currentRevision } : {}),
       }
-      return Response.json(body, {
+      return mutationResponse(principal, body, {
         status: error.status,
         headers: error.currentRevision ? { ETag: `"${error.currentRevision}"` } : undefined,
       })
     }
 
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return mutationResponse(principal, { error: 'The requested vault resource is not available.' }, { status: error.status })
     }
 
     if (error instanceof Error && error.message === 'Invalid note write payload') {
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Invalid request body',
         },
@@ -1559,7 +1819,8 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
 
     if (error instanceof Error && error.message.startsWith('Note not found: ')) {
       const notePath = error.message.replace('Note not found: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Note not found',
           path: notePath,
@@ -1569,7 +1830,8 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
     }
 
     if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest contentHash') {
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: error.message,
           code: 'STALE_NOTE_CONTENT_HASH',
@@ -1581,10 +1843,11 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
     }
 
     if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest rawContentHash') {
-      return Response.json({ error: error.message }, { status: 409 })
+      return mutationResponse(principal, { error: error.message }, { status: 409 })
     }
 
-    return Response.json(
+    return mutationResponse(
+      principal,
       {
         error: 'Invalid note path',
         path: input.path ?? '',
@@ -1595,9 +1858,10 @@ export async function updateVaultNoteByPathResponse(input: VaultNoteUpdateInput)
 }
 
 export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   try {
     const moved = await moveVaultNote(input)
-    return Response.json(moved, { headers: { ETag: `"${moved.note.revision}"` } })
+    return mutationResponse(principal, moved, { headers: { ETag: `"${moved.note.revision}"` } })
   } catch (error) {
     if (error instanceof VaultWriteRevisionError) {
       const body = {
@@ -1607,18 +1871,19 @@ export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Pr
         readUrl: error.readUrl,
         ...(error.currentRevision ? { currentRevision: error.currentRevision } : {}),
       }
-      return Response.json(body, {
+      return mutationResponse(principal, body, {
         status: error.status,
         headers: error.currentRevision ? { ETag: `"${error.currentRevision}"` } : undefined,
       })
     }
 
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return mutationResponse(principal, { error: 'The requested vault resource is not available.' }, { status: error.status })
     }
     if (error instanceof Error && error.message.startsWith('Note not found: ')) {
       const notePath = error.message.replace('Note not found: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Note not found',
           path: notePath,
@@ -1629,7 +1894,8 @@ export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Pr
 
     if (error instanceof Error && error.message.startsWith('Destination already exists: ')) {
       const notePath = error.message.replace('Destination already exists: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Destination already exists',
           path: notePath,
@@ -1639,7 +1905,8 @@ export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Pr
     }
 
     if (error instanceof Error && error.message === 'Note changed since it was read; retry with the latest contentHash') {
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: error.message,
           code: 'STALE_NOTE_CONTENT_HASH',
@@ -1650,7 +1917,8 @@ export async function moveVaultNoteByPathResponse(input: VaultNoteMoveInput): Pr
       )
     }
 
-    return Response.json(
+    return mutationResponse(
+      principal,
       {
         error: 'Invalid note path',
         path: input.path ?? '',
@@ -1664,17 +1932,19 @@ export async function deleteVaultNoteByPathResponse(input: {
   path: string | null | undefined
   principal?: VaultPrincipal
 }): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   try {
     const deleted = await deleteVaultNote(input.path, input.principal)
-    return Response.json(deleted)
+    return mutationResponse(principal, deleted)
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return mutationResponse(principal, { error: 'The requested vault resource is not available.' }, { status: error.status })
     }
 
     if (error instanceof Error && error.message.startsWith('Note not found: ')) {
       const notePath = error.message.replace('Note not found: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Note not found',
           path: notePath,
@@ -1683,7 +1953,8 @@ export async function deleteVaultNoteByPathResponse(input: {
       )
     }
 
-    return Response.json(
+    return mutationResponse(
+      principal,
       {
         error: 'Invalid note path',
         path: input.path ?? '',
@@ -1697,9 +1968,10 @@ export async function deleteVaultFolderResponse(input: {
   path: string | null | undefined
   principal?: VaultPrincipal
 }): Promise<Response> {
+  const principal = getPrincipal(input.principal)
   try {
     const deleted = await deleteVaultFolder(input.path, input.principal)
-    return Response.json({
+    return mutationResponse(principal, {
       builtAt: deleted.builtAt,
       deleted: true,
       folder: {
@@ -1708,12 +1980,13 @@ export async function deleteVaultFolderResponse(input: {
     })
   } catch (error) {
     if (error instanceof VaultAuthorizationError) {
-      return Response.json({ error: 'The requested vault resource is not available.' }, { status: error.status })
+      return mutationResponse(principal, { error: 'The requested vault resource is not available.' }, { status: error.status })
     }
 
     if (error instanceof Error && error.message.startsWith('Folder not found: ')) {
       const folderPath = error.message.replace('Folder not found: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Folder not found',
           path: folderPath,
@@ -1724,7 +1997,8 @@ export async function deleteVaultFolderResponse(input: {
 
     if (error instanceof Error && error.message.startsWith('Folder not empty: ')) {
       const folderPath = error.message.replace('Folder not empty: ', '')
-      return Response.json(
+      return mutationResponse(
+        principal,
         {
           error: 'Folder not empty',
           path: folderPath,
@@ -1733,7 +2007,8 @@ export async function deleteVaultFolderResponse(input: {
       )
     }
 
-    return Response.json(
+    return mutationResponse(
+      principal,
       {
         error: 'Invalid folder path',
         path: input.path ?? '',

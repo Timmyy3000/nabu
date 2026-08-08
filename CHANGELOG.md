@@ -4,6 +4,13 @@ All notable changes to Nabu will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Added owner-authenticated, rotatable read-only URL tokens for shared spaces,
+  including scoped browser/API reads, asset access, expiry, and revocation.
+- Expanded the shared-space lease maximum from 30 to 183 days while preserving
+  the 7-day default and 1-day minimum.
+
 ## [0.7.2] - 2026-08-04
 
 ### Fixed

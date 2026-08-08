@@ -5,10 +5,15 @@ export const Route = createFileRoute('/api/vault/notes/')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { requireVaultPrincipal } = await import('../../../../lib/auth/authorization')
+        const { requireVaultPrincipal, toVaultWriteAuthorizationResponse } = await import('../../../../lib/auth/authorization')
         const auth = await requireVaultPrincipal(request)
         if (auth.response) {
           return auth.response
+        }
+
+        const writeAuthorization = toVaultWriteAuthorizationResponse(auth.principal)
+        if (writeAuthorization) {
+          return writeAuthorization
         }
 
         let body: unknown

@@ -8,6 +8,7 @@ import { Route as ProposalsRoute } from './shared-spaces/proposals'
 import { Route as SpacesRoute } from './shared-spaces/index'
 import { Route as ExtendRoute } from './shared-spaces/$sharedSpaceId/extend'
 import { Route as RedeemRoute } from './shared-spaces/invites/redeem'
+import { Route as ReadLinkRoute } from './shared-spaces/$sharedSpaceId/read-link'
 
 const originalKnowledgePath = process.env.KNOWLEDGE_PATH
 const originalDataPath = process.env.NABU_DATA_PATH
@@ -111,5 +112,73 @@ describe('shared-space HTTP API', () => {
       }),
     })
     expect(reused.status).toBe(410)
+  })
+
+  it('issues and revokes the exact owner-only read-link contract', async () => {
+    await fixture()
+    const proposalResponse = await ProposalsRoute.options.server!.handlers!.POST({
+      request: new Request('http://localhost:3000/api/shared-spaces/proposals', {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ path: 'little-helpers' }),
+      }),
+    })
+    const proposal = await proposalResponse.json()
+    const spaceResponse = await SpacesRoute.options.server!.handlers!.POST({
+      request: new Request('http://localhost:3000/api/shared-spaces', {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ proposalId: proposal.proposalId, confirmed: true, durationDays: 183 }),
+      }),
+    })
+    const space = await spaceResponse.json()
+    const handlers = ReadLinkRoute.options.server!.handlers!
+
+    const invalid = await handlers.POST({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}/read-link`, {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ durationDays: 184 }),
+      }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    expect(invalid.status).toBe(400)
+
+    const issued = await handlers.POST({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}/read-link`, {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ durationDays: 7 }),
+      }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    const payload = await issued.json()
+    expect(issued.status).toBe(201)
+    expect(payload).toMatchObject({
+      sharedSpaceId: space.sharedSpaceId,
+      rootPath: 'little-helpers',
+      permission: 'read',
+      durationDays: 7,
+      expiresAt: expect.any(String),
+      shareUrl: expect.stringContaining('token='),
+    })
+
+    const revoked = await handlers.DELETE({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}/read-link`, {
+        method: 'DELETE',
+        headers: ownerHeaders(),
+      }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    expect(revoked.status).toBe(204)
+    expect(await revoked.text()).toBe('')
+    const repeated = await handlers.DELETE({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}/read-link`, {
+        method: 'DELETE',
+        headers: ownerHeaders(),
+      }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    expect(repeated.status).toBe(204)
   })
 })

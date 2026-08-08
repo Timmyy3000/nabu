@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { __resetSharedSpaceStoreForTests, getSharedSpaceStore } from './store'
+import { hashSecret } from './crypto'
 
 const originalDataPath = process.env.NABU_DATA_PATH
 const originalNodeEnv = process.env.NODE_ENV
@@ -68,5 +69,81 @@ describe('shared-space store configuration and persistence', () => {
     delete process.env.NABU_DATA_PATH
 
     await expect(getSharedSpaceStore()).rejects.toThrow('NABU_DATA_PATH is required in production')
+  })
+
+  it('rotates one hashed read link row atomically per shared space', async () => {
+    process.env.NODE_ENV = 'test'
+    process.env.NABU_DATA_PATH = await createDataPath()
+    const store = await getSharedSpaceStore()
+    const space = {
+      id: 'space-1',
+      ownerPrincipalId: 'owner',
+      rootPath: 'projects/canner',
+      permissions: ['read', 'write'] as ['read', 'write'],
+      createdAt: 1_000,
+      expiresAt: 10_000,
+      revokedAt: null,
+    }
+
+    store.createProposal({
+      id: 'proposal-1',
+      ownerPrincipalId: 'owner',
+      rootPath: space.rootPath,
+      preview: {
+        proposalId: 'proposal-1',
+        rootPath: space.rootPath,
+        files: [],
+        folders: [],
+        fileCount: 0,
+        totalBytes: 0,
+        warnings: [],
+        liveRecursiveScope: true,
+        expiresAt: new Date(2_000).toISOString(),
+      },
+      createdAt: 1_000,
+      expiresAt: 2_000,
+    })
+    expect(store.consumeProposalAndCreateSpace({
+      proposalId: 'proposal-1',
+      ownerPrincipalId: 'owner',
+      now: 1_000,
+      space,
+      invite: {
+        id: 'invite-1',
+        sharedSpaceId: space.id,
+        tokenHash: hashSecret('invite-secret'),
+        createdAt: 1_000,
+        expiresAt: 2_000,
+        redeemedAt: null,
+        redeemedByPrincipalId: null,
+      },
+    })).not.toBeNull()
+
+    const first = store.rotateReadLink({
+      id: 'read-link-1',
+      sharedSpaceId: space.id,
+      tokenHash: hashSecret('first-secret'),
+      createdAt: 1_000,
+      expiresAt: 8_000,
+      revokedAt: null,
+    })
+    const second = store.rotateReadLink({
+      id: 'read-link-2',
+      sharedSpaceId: space.id,
+      tokenHash: hashSecret('second-secret'),
+      createdAt: 2_000,
+      expiresAt: 9_000,
+      revokedAt: null,
+    })
+
+    expect(first.tokenHash).toBe(hashSecret('first-secret'))
+    expect(store.findReadLink(hashSecret('first-secret'), 2_000)).toBeNull()
+    expect(store.findReadLink(hashSecret('second-secret'), 2_000)).toMatchObject({
+      id: 'read-link-2',
+      sharedSpaceId: space.id,
+      rootPath: space.rootPath,
+      tokenHash: hashSecret('second-secret'),
+    })
+    expect(store.getReadLinkForTest(space.id)).toMatchObject({ id: second.id })
   })
 })

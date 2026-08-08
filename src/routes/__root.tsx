@@ -21,6 +21,10 @@ export const Route = createRootRoute({
         name: 'description',
         content: 'Nabu is an open-source markdown-native knowledge OS for humans and agents.',
       },
+      {
+        name: 'referrer',
+        content: 'no-referrer',
+      },
     ],
     links: [
       {

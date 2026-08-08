@@ -344,6 +344,47 @@ describe('HomePage', () => {
     expect(screen.getByRole('link', { name: 'Roadmap Doc' }).getAttribute('href')).toContain('folder=projects')
   })
 
+  it('renders a token-backed page as read-only and preserves the token across navigation', () => {
+    const browse = buildBrowseFixture()
+    browse.note.body += '\n\n[Non-accessible link](#nabu-inaccessible-1)\n\n![diagram](diagram.png)'
+    browse.note.rawMarkdown = browse.note.body
+    browse.note.outgoingLinks.push({
+      raw: '[Non-accessible link](#nabu-inaccessible-1)',
+      kind: 'markdown',
+      text: 'Non-accessible link',
+      target: 'inaccessible',
+      resolved: false,
+      targetRelPath: null,
+      targetSlug: null,
+      inaccessible: true,
+    })
+
+    const { container } = render(
+      <HomePage browse={browse} search={null} searchPathInput="" searchTagInput="" shareToken="read-secret" />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent(/read-only shared space/i)
+    expect(screen.queryByRole('button', { name: /edit note/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Non-accessible link')).toBeInTheDocument()
+    expect(JSON.parse(screen.getAllByRole('link', { name: '#ai' })[0].getAttribute('data-search-value') ?? '{}')).toMatchObject({
+      token: 'read-secret',
+    })
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('/api/vault/assets?path=ideas%2Fdiagram.png&token=read-secret')
+  })
+
+  it('does not fetch external images from a token-backed page', () => {
+    const browse = buildBrowseFixture()
+    browse.note.body += '\n\n![remote](https://example.com/remote.png)'
+    browse.note.rawMarkdown = browse.note.body
+
+    const { container } = render(
+      <HomePage browse={browse} search={null} searchPathInput="" searchTagInput="" shareToken="read-secret" />,
+    )
+
+    expect(screen.getByText('remote')).toBeInTheDocument()
+    expect(container.querySelector('img[src="https://example.com/remote.png"]')).not.toBeInTheDocument()
+  })
+
   it('reveals note details, metadata, backlinks, outgoing links, and related notes in the details drawer', () => {
     render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
