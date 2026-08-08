@@ -57,6 +57,18 @@ export type SharedSpaceAccessTokenRecord = {
   sharedSpaceRevokedAt: number | null
 }
 
+export type SharedSpaceReadLinkRecord = {
+  id: string
+  sharedSpaceId: string
+  tokenHash: string
+  createdAt: number
+  expiresAt: number
+  revokedAt: number | null
+  rootPath: string
+  sharedSpaceExpiresAt: number
+  sharedSpaceRevokedAt: number | null
+}
+
 export type SharedSpaceDetails = {
   sharedSpaceId: string
   rootPath: string

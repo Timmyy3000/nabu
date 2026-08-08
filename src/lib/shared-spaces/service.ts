@@ -8,12 +8,14 @@ import type {
   SharedSpaceDetails,
   SharedSpacePermission,
   SharedSpacePreview,
+  SharedSpaceReadLinkRecord,
   SharedSpaceRecord,
 } from './types'
 
 export const DEFAULT_SHARED_SPACE_DURATION_DAYS = 7
 export const MIN_SHARED_SPACE_DURATION_DAYS = 1
-export const MAX_SHARED_SPACE_DURATION_DAYS = 30
+export const MAX_SHARED_SPACE_DURATION_DAYS = 183
+export const SHARED_SPACE_DAY_MS = 24 * 60 * 60 * 1_000
 export const INVITE_TTL_MS = 60 * 60 * 1_000
 export const PROPOSAL_TTL_MS = 10 * 60 * 1_000
 export const LIVE_SCOPE_WARNING = 'Any files or folders added under this path later will also be part of the shared space.'
@@ -66,6 +68,15 @@ type SharedSpaceRedemptionResult = {
   sharedSpaceExpiresAt: string
   accessToken: string
   accessTokenExpiresAt: string
+}
+
+export type SharedSpaceReadLinkResult = {
+  sharedSpaceId: string
+  rootPath: string
+  permission: 'read'
+  shareUrl: string
+  durationDays: number
+  expiresAt: string
 }
 
 type FolderScan = {
@@ -196,6 +207,13 @@ function inviteUrl(baseUrl: string, secret: string): string {
   return new URL(`/invites/${secret}`, baseUrl).toString()
 }
 
+function readLinkUrl(baseUrl: string, rootPath: string, secret: string): string {
+  const url = new URL('/', baseUrl)
+  url.searchParams.set('path', rootPath)
+  url.searchParams.set('token', secret)
+  return url.toString()
+}
+
 function extractInviteSecret(value: string): string {
   try {
     const url = new URL(value)
@@ -280,7 +298,7 @@ export class SharedSpaceService {
       rootPath: proposal.rootPath,
       permissions,
       createdAt: now,
-      expiresAt: now + durationDays * 24 * 60 * 60 * 1_000,
+      expiresAt: now + durationDays * SHARED_SPACE_DAY_MS,
       revokedAt: null,
     }
     const secret = generateOpaqueSecret()
@@ -431,8 +449,8 @@ export class SharedSpaceService {
     if (!space || space.ownerPrincipalId !== input.ownerPrincipalId || space.revokedAt != null || space.expiresAt <= now) {
       throw new SharedSpaceError('Shared space not found or expired.', 'SHARED_SPACE_NOT_FOUND', 404)
     }
-    const maximumExpiry = space.createdAt + MAX_SHARED_SPACE_DURATION_DAYS * 24 * 60 * 60 * 1_000
-    const requestedExpiry = Math.min(now + durationDays * 24 * 60 * 60 * 1_000, maximumExpiry)
+    const maximumExpiry = space.createdAt + MAX_SHARED_SPACE_DURATION_DAYS * SHARED_SPACE_DAY_MS
+    const requestedExpiry = Math.min(now + durationDays * SHARED_SPACE_DAY_MS, maximumExpiry)
     if (requestedExpiry <= space.expiresAt) {
       throw new SharedSpaceError('The requested extension does not extend the shared-space lease.', 'SHARED_SPACE_DURATION_INVALID')
     }
@@ -443,9 +461,58 @@ export class SharedSpaceService {
     return toDetails(extended)
   }
 
+  async issueReadLink(input: {
+    ownerPrincipalId: string
+    sharedSpaceId: string
+    durationDays?: number | null
+    baseUrl?: string
+  }): Promise<SharedSpaceReadLinkResult> {
+    const durationDays = normalizeDuration(input.durationDays)
+    const store = await getSharedSpaceStore()
+    const now = this.now()
+    const space = store.getSpace(input.sharedSpaceId)
+    if (!space || space.ownerPrincipalId !== input.ownerPrincipalId || space.revokedAt != null || space.expiresAt <= now) {
+      throw new SharedSpaceError('Shared space not found or expired.', 'SHARED_SPACE_NOT_FOUND', 404)
+    }
+
+    const secret = generateOpaqueSecret()
+    const expiresAt = Math.min(now + durationDays * SHARED_SPACE_DAY_MS, space.expiresAt)
+    const link = store.rotateReadLink({
+      id: generateId('read-link'),
+      sharedSpaceId: space.id,
+      tokenHash: hashSecret(secret),
+      createdAt: now,
+      expiresAt,
+      revokedAt: null,
+    })
+
+    return {
+      sharedSpaceId: space.id,
+      rootPath: space.rootPath,
+      permission: 'read',
+      shareUrl: readLinkUrl(input.baseUrl ?? this.baseUrl, space.rootPath, secret),
+      durationDays,
+      expiresAt: iso(link.expiresAt),
+    }
+  }
+
+  async revokeReadLink(input: { ownerPrincipalId: string; sharedSpaceId: string }): Promise<void> {
+    const store = await getSharedSpaceStore()
+    const space = store.getSpace(input.sharedSpaceId)
+    if (!space || space.ownerPrincipalId !== input.ownerPrincipalId) {
+      throw new SharedSpaceError('Shared space not found.', 'SHARED_SPACE_NOT_FOUND', 404)
+    }
+    store.revokeReadLink(space.id, this.now())
+  }
+
   async getAccessTokenForTest(tokenHash: string) {
     const store = await getSharedSpaceStore()
     return store.getAccessTokenForTest(tokenHash)
+  }
+
+  async getReadLinkForTest(sharedSpaceId: string): Promise<SharedSpaceReadLinkRecord | null> {
+    const store = await getSharedSpaceStore()
+    return store.getReadLinkForTest(sharedSpaceId)
   }
 }
 

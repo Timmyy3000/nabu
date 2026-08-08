@@ -9,38 +9,35 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LogoutRouteImport } from './routes/logout'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AgentsDotmdRouteImport } from './routes/agents[.]md'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AgentsDotmdRouteImport } from './routes/agents[.]md'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
-import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
-import { Route as ApiSharedSpacesIndexRouteImport } from './routes/api/shared-spaces/index'
-import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
-import { Route as ApiVaultSearchRouteImport } from './routes/api/vault/search'
-import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
-import { Route as ApiSharedSpacesProposalsRouteImport } from './routes/api/shared-spaces/proposals'
-import { Route as ApiSharedSpacesSharedSpaceIdRouteImport } from './routes/api/shared-spaces/$sharedSpaceId'
-import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAgentBootstrapRouteImport } from './routes/api/agent/bootstrap'
-import { Route as ApiVaultNotesIndexRouteImport } from './routes/api/vault/notes/index'
-import { Route as ApiVaultNotesNeighborhoodRouteImport } from './routes/api/vault/notes/neighborhood'
-import { Route as ApiVaultNotesByPathRouteImport } from './routes/api/vault/notes/by-path'
-import { Route as ApiVaultNotesSlugRouteImport } from './routes/api/vault/notes/$slug'
-import { Route as ApiVaultIndexStatsRouteImport } from './routes/api/vault/index/stats'
-import { Route as ApiSharedSpacesInvitesRedeemRouteImport } from './routes/api/shared-spaces/invites/redeem'
-import { Route as ApiSharedSpacesSharedSpaceIdRevokeRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/revoke'
-import { Route as ApiSharedSpacesSharedSpaceIdInvitesRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/invites'
+import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiSharedSpacesIndexRouteImport } from './routes/api/shared-spaces/index'
+import { Route as ApiSharedSpacesSharedSpaceIdRouteImport } from './routes/api/shared-spaces/$sharedSpaceId'
+import { Route as ApiSharedSpacesProposalsRouteImport } from './routes/api/shared-spaces/proposals'
+import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
+import { Route as ApiVaultAssetsRouteImport } from './routes/api/vault/assets'
+import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
+import { Route as ApiVaultSearchRouteImport } from './routes/api/vault/search'
+import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
 import { Route as ApiSharedSpacesSharedSpaceIdExtendRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/extend'
+import { Route as ApiSharedSpacesSharedSpaceIdInvitesRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/invites'
+import { Route as ApiSharedSpacesSharedSpaceIdReadLinkRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/read-link'
+import { Route as ApiSharedSpacesSharedSpaceIdRevokeRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/revoke'
+import { Route as ApiSharedSpacesInvitesRedeemRouteImport } from './routes/api/shared-spaces/invites/redeem'
+import { Route as ApiVaultIndexStatsRouteImport } from './routes/api/vault/index/stats'
+import { Route as ApiVaultNotesIndexRouteImport } from './routes/api/vault/notes/index'
+import { Route as ApiVaultNotesSlugRouteImport } from './routes/api/vault/notes/$slug'
+import { Route as ApiVaultNotesByPathRouteImport } from './routes/api/vault/notes/by-path'
+import { Route as ApiVaultNotesNeighborhoodRouteImport } from './routes/api/vault/notes/neighborhood'
 
-const LogoutRoute = LogoutRouteImport.update({
-  id: '/logout',
-  path: '/logout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentsDotmdRoute = AgentsDotmdRouteImport.update({
@@ -48,9 +45,14 @@ const AgentsDotmdRoute = AgentsDotmdRouteImport.update({
   path: '/agents.md',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogoutRoute = LogoutRouteImport.update({
+  id: '/logout',
+  path: '/logout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -58,9 +60,14 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVaultIndexRoute = ApiVaultIndexRouteImport.update({
-  id: '/api/vault/',
-  path: '/api/vault/',
+const ApiAgentBootstrapRoute = ApiAgentBootstrapRouteImport.update({
+  id: '/api/agent/bootstrap',
+  path: '/api/agent/bootstrap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSharedSpacesIndexRoute = ApiSharedSpacesIndexRouteImport.update({
@@ -68,14 +75,26 @@ const ApiSharedSpacesIndexRoute = ApiSharedSpacesIndexRouteImport.update({
   path: '/api/shared-spaces/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVaultTreeRoute = ApiVaultTreeRouteImport.update({
-  id: '/api/vault/tree',
-  path: '/api/vault/tree',
+const ApiSharedSpacesSharedSpaceIdRoute =
+  ApiSharedSpacesSharedSpaceIdRouteImport.update({
+    id: '/api/shared-spaces/$sharedSpaceId',
+    path: '/api/shared-spaces/$sharedSpaceId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSharedSpacesProposalsRoute =
+  ApiSharedSpacesProposalsRouteImport.update({
+    id: '/api/shared-spaces/proposals',
+    path: '/api/shared-spaces/proposals',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiVaultIndexRoute = ApiVaultIndexRouteImport.update({
+  id: '/api/vault/',
+  path: '/api/vault/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVaultSearchRoute = ApiVaultSearchRouteImport.update({
-  id: '/api/vault/search',
-  path: '/api/vault/search',
+const ApiVaultAssetsRoute = ApiVaultAssetsRouteImport.update({
+  id: '/api/vault/assets',
+  path: '/api/vault/assets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
@@ -83,64 +102,20 @@ const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
   path: '/api/vault/folders',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiSharedSpacesProposalsRoute =
-  ApiSharedSpacesProposalsRouteImport.update({
-    id: '/api/shared-spaces/proposals',
-    path: '/api/shared-spaces/proposals',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiSharedSpacesSharedSpaceIdRoute =
-  ApiSharedSpacesSharedSpaceIdRouteImport.update({
-    id: '/api/shared-spaces/$sharedSpaceId',
-    path: '/api/shared-spaces/$sharedSpaceId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
-  id: '/api/auth/login',
-  path: '/api/auth/login',
+const ApiVaultSearchRoute = ApiVaultSearchRouteImport.update({
+  id: '/api/vault/search',
+  path: '/api/vault/search',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAgentBootstrapRoute = ApiAgentBootstrapRouteImport.update({
-  id: '/api/agent/bootstrap',
-  path: '/api/agent/bootstrap',
+const ApiVaultTreeRoute = ApiVaultTreeRouteImport.update({
+  id: '/api/vault/tree',
+  path: '/api/vault/tree',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVaultNotesIndexRoute = ApiVaultNotesIndexRouteImport.update({
-  id: '/api/vault/notes/',
-  path: '/api/vault/notes/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiVaultNotesNeighborhoodRoute =
-  ApiVaultNotesNeighborhoodRouteImport.update({
-    id: '/api/vault/notes/neighborhood',
-    path: '/api/vault/notes/neighborhood',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiVaultNotesByPathRoute = ApiVaultNotesByPathRouteImport.update({
-  id: '/api/vault/notes/by-path',
-  path: '/api/vault/notes/by-path',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiVaultNotesSlugRoute = ApiVaultNotesSlugRouteImport.update({
-  id: '/api/vault/notes/$slug',
-  path: '/api/vault/notes/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiVaultIndexStatsRoute = ApiVaultIndexStatsRouteImport.update({
-  id: '/api/vault/index/stats',
-  path: '/api/vault/index/stats',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSharedSpacesInvitesRedeemRoute =
-  ApiSharedSpacesInvitesRedeemRouteImport.update({
-    id: '/api/shared-spaces/invites/redeem',
-    path: '/api/shared-spaces/invites/redeem',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiSharedSpacesSharedSpaceIdRevokeRoute =
-  ApiSharedSpacesSharedSpaceIdRevokeRouteImport.update({
-    id: '/revoke',
-    path: '/revoke',
+const ApiSharedSpacesSharedSpaceIdExtendRoute =
+  ApiSharedSpacesSharedSpaceIdExtendRouteImport.update({
+    id: '/extend',
+    path: '/extend',
     getParentRoute: () => ApiSharedSpacesSharedSpaceIdRoute,
   } as any)
 const ApiSharedSpacesSharedSpaceIdInvitesRoute =
@@ -149,11 +124,49 @@ const ApiSharedSpacesSharedSpaceIdInvitesRoute =
     path: '/invites',
     getParentRoute: () => ApiSharedSpacesSharedSpaceIdRoute,
   } as any)
-const ApiSharedSpacesSharedSpaceIdExtendRoute =
-  ApiSharedSpacesSharedSpaceIdExtendRouteImport.update({
-    id: '/extend',
-    path: '/extend',
+const ApiSharedSpacesSharedSpaceIdReadLinkRoute =
+  ApiSharedSpacesSharedSpaceIdReadLinkRouteImport.update({
+    id: '/read-link',
+    path: '/read-link',
     getParentRoute: () => ApiSharedSpacesSharedSpaceIdRoute,
+  } as any)
+const ApiSharedSpacesSharedSpaceIdRevokeRoute =
+  ApiSharedSpacesSharedSpaceIdRevokeRouteImport.update({
+    id: '/revoke',
+    path: '/revoke',
+    getParentRoute: () => ApiSharedSpacesSharedSpaceIdRoute,
+  } as any)
+const ApiSharedSpacesInvitesRedeemRoute =
+  ApiSharedSpacesInvitesRedeemRouteImport.update({
+    id: '/api/shared-spaces/invites/redeem',
+    path: '/api/shared-spaces/invites/redeem',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiVaultIndexStatsRoute = ApiVaultIndexStatsRouteImport.update({
+  id: '/api/vault/index/stats',
+  path: '/api/vault/index/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultNotesIndexRoute = ApiVaultNotesIndexRouteImport.update({
+  id: '/api/vault/notes/',
+  path: '/api/vault/notes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultNotesSlugRoute = ApiVaultNotesSlugRouteImport.update({
+  id: '/api/vault/notes/$slug',
+  path: '/api/vault/notes/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultNotesByPathRoute = ApiVaultNotesByPathRouteImport.update({
+  id: '/api/vault/notes/by-path',
+  path: '/api/vault/notes/by-path',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultNotesNeighborhoodRoute =
+  ApiVaultNotesNeighborhoodRouteImport.update({
+    id: '/api/vault/notes/neighborhood',
+    path: '/api/vault/notes/neighborhood',
+    getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -166,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/shared-spaces/$sharedSpaceId': typeof ApiSharedSpacesSharedSpaceIdRouteWithChildren
   '/api/shared-spaces/proposals': typeof ApiSharedSpacesProposalsRoute
+  '/api/vault/assets': typeof ApiVaultAssetsRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
@@ -173,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/api/vault/': typeof ApiVaultIndexRoute
   '/api/shared-spaces/$sharedSpaceId/extend': typeof ApiSharedSpacesSharedSpaceIdExtendRoute
   '/api/shared-spaces/$sharedSpaceId/invites': typeof ApiSharedSpacesSharedSpaceIdInvitesRoute
+  '/api/shared-spaces/$sharedSpaceId/read-link': typeof ApiSharedSpacesSharedSpaceIdReadLinkRoute
   '/api/shared-spaces/$sharedSpaceId/revoke': typeof ApiSharedSpacesSharedSpaceIdRevokeRoute
   '/api/shared-spaces/invites/redeem': typeof ApiSharedSpacesInvitesRedeemRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
@@ -191,6 +206,7 @@ export interface FileRoutesByTo {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/shared-spaces/$sharedSpaceId': typeof ApiSharedSpacesSharedSpaceIdRouteWithChildren
   '/api/shared-spaces/proposals': typeof ApiSharedSpacesProposalsRoute
+  '/api/vault/assets': typeof ApiVaultAssetsRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
@@ -198,6 +214,7 @@ export interface FileRoutesByTo {
   '/api/vault': typeof ApiVaultIndexRoute
   '/api/shared-spaces/$sharedSpaceId/extend': typeof ApiSharedSpacesSharedSpaceIdExtendRoute
   '/api/shared-spaces/$sharedSpaceId/invites': typeof ApiSharedSpacesSharedSpaceIdInvitesRoute
+  '/api/shared-spaces/$sharedSpaceId/read-link': typeof ApiSharedSpacesSharedSpaceIdReadLinkRoute
   '/api/shared-spaces/$sharedSpaceId/revoke': typeof ApiSharedSpacesSharedSpaceIdRevokeRoute
   '/api/shared-spaces/invites/redeem': typeof ApiSharedSpacesInvitesRedeemRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
@@ -217,6 +234,7 @@ export interface FileRoutesById {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/shared-spaces/$sharedSpaceId': typeof ApiSharedSpacesSharedSpaceIdRouteWithChildren
   '/api/shared-spaces/proposals': typeof ApiSharedSpacesProposalsRoute
+  '/api/vault/assets': typeof ApiVaultAssetsRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
@@ -224,6 +242,7 @@ export interface FileRoutesById {
   '/api/vault/': typeof ApiVaultIndexRoute
   '/api/shared-spaces/$sharedSpaceId/extend': typeof ApiSharedSpacesSharedSpaceIdExtendRoute
   '/api/shared-spaces/$sharedSpaceId/invites': typeof ApiSharedSpacesSharedSpaceIdInvitesRoute
+  '/api/shared-spaces/$sharedSpaceId/read-link': typeof ApiSharedSpacesSharedSpaceIdReadLinkRoute
   '/api/shared-spaces/$sharedSpaceId/revoke': typeof ApiSharedSpacesSharedSpaceIdRevokeRoute
   '/api/shared-spaces/invites/redeem': typeof ApiSharedSpacesInvitesRedeemRoute
   '/api/vault/index/stats': typeof ApiVaultIndexStatsRoute
@@ -244,6 +263,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/shared-spaces/$sharedSpaceId'
     | '/api/shared-spaces/proposals'
+    | '/api/vault/assets'
     | '/api/vault/folders'
     | '/api/vault/search'
     | '/api/vault/tree'
@@ -251,6 +271,7 @@ export interface FileRouteTypes {
     | '/api/vault/'
     | '/api/shared-spaces/$sharedSpaceId/extend'
     | '/api/shared-spaces/$sharedSpaceId/invites'
+    | '/api/shared-spaces/$sharedSpaceId/read-link'
     | '/api/shared-spaces/$sharedSpaceId/revoke'
     | '/api/shared-spaces/invites/redeem'
     | '/api/vault/index/stats'
@@ -269,6 +290,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/shared-spaces/$sharedSpaceId'
     | '/api/shared-spaces/proposals'
+    | '/api/vault/assets'
     | '/api/vault/folders'
     | '/api/vault/search'
     | '/api/vault/tree'
@@ -276,6 +298,7 @@ export interface FileRouteTypes {
     | '/api/vault'
     | '/api/shared-spaces/$sharedSpaceId/extend'
     | '/api/shared-spaces/$sharedSpaceId/invites'
+    | '/api/shared-spaces/$sharedSpaceId/read-link'
     | '/api/shared-spaces/$sharedSpaceId/revoke'
     | '/api/shared-spaces/invites/redeem'
     | '/api/vault/index/stats'
@@ -294,6 +317,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/shared-spaces/$sharedSpaceId'
     | '/api/shared-spaces/proposals'
+    | '/api/vault/assets'
     | '/api/vault/folders'
     | '/api/vault/search'
     | '/api/vault/tree'
@@ -301,6 +325,7 @@ export interface FileRouteTypes {
     | '/api/vault/'
     | '/api/shared-spaces/$sharedSpaceId/extend'
     | '/api/shared-spaces/$sharedSpaceId/invites'
+    | '/api/shared-spaces/$sharedSpaceId/read-link'
     | '/api/shared-spaces/$sharedSpaceId/revoke'
     | '/api/shared-spaces/invites/redeem'
     | '/api/vault/index/stats'
@@ -320,6 +345,7 @@ export interface RootRouteChildren {
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiSharedSpacesSharedSpaceIdRoute: typeof ApiSharedSpacesSharedSpaceIdRouteWithChildren
   ApiSharedSpacesProposalsRoute: typeof ApiSharedSpacesProposalsRoute
+  ApiVaultAssetsRoute: typeof ApiVaultAssetsRoute
   ApiVaultFoldersRoute: typeof ApiVaultFoldersRoute
   ApiVaultSearchRoute: typeof ApiVaultSearchRoute
   ApiVaultTreeRoute: typeof ApiVaultTreeRoute
@@ -335,18 +361,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/logout': {
-      id: '/logout'
-      path: '/logout'
-      fullPath: '/logout'
-      preLoaderRoute: typeof LogoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agents.md': {
@@ -356,11 +375,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentsDotmdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logout': {
+      id: '/logout'
+      path: '/logout'
+      fullPath: '/logout'
+      preLoaderRoute: typeof LogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -370,53 +396,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vault/': {
-      id: '/api/vault/'
-      path: '/api/vault'
-      fullPath: '/api/vault/'
-      preLoaderRoute: typeof ApiVaultIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/shared-spaces/': {
-      id: '/api/shared-spaces/'
-      path: '/api/shared-spaces'
-      fullPath: '/api/shared-spaces/'
-      preLoaderRoute: typeof ApiSharedSpacesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/vault/tree': {
-      id: '/api/vault/tree'
-      path: '/api/vault/tree'
-      fullPath: '/api/vault/tree'
-      preLoaderRoute: typeof ApiVaultTreeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/vault/search': {
-      id: '/api/vault/search'
-      path: '/api/vault/search'
-      fullPath: '/api/vault/search'
-      preLoaderRoute: typeof ApiVaultSearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/vault/folders': {
-      id: '/api/vault/folders'
-      path: '/api/vault/folders'
-      fullPath: '/api/vault/folders'
-      preLoaderRoute: typeof ApiVaultFoldersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/shared-spaces/proposals': {
-      id: '/api/shared-spaces/proposals'
-      path: '/api/shared-spaces/proposals'
-      fullPath: '/api/shared-spaces/proposals'
-      preLoaderRoute: typeof ApiSharedSpacesProposalsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/shared-spaces/$sharedSpaceId': {
-      id: '/api/shared-spaces/$sharedSpaceId'
-      path: '/api/shared-spaces/$sharedSpaceId'
-      fullPath: '/api/shared-spaces/$sharedSpaceId'
-      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdRouteImport
+    '/api/agent/bootstrap': {
+      id: '/api/agent/bootstrap'
+      path: '/api/agent/bootstrap'
+      fullPath: '/api/agent/bootstrap'
+      preLoaderRoute: typeof ApiAgentBootstrapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/login': {
@@ -426,60 +410,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/agent/bootstrap': {
-      id: '/api/agent/bootstrap'
-      path: '/api/agent/bootstrap'
-      fullPath: '/api/agent/bootstrap'
-      preLoaderRoute: typeof ApiAgentBootstrapRouteImport
+    '/api/shared-spaces/': {
+      id: '/api/shared-spaces/'
+      path: '/api/shared-spaces'
+      fullPath: '/api/shared-spaces/'
+      preLoaderRoute: typeof ApiSharedSpacesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vault/notes/': {
-      id: '/api/vault/notes/'
-      path: '/api/vault/notes'
-      fullPath: '/api/vault/notes/'
-      preLoaderRoute: typeof ApiVaultNotesIndexRouteImport
+    '/api/shared-spaces/$sharedSpaceId': {
+      id: '/api/shared-spaces/$sharedSpaceId'
+      path: '/api/shared-spaces/$sharedSpaceId'
+      fullPath: '/api/shared-spaces/$sharedSpaceId'
+      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vault/notes/neighborhood': {
-      id: '/api/vault/notes/neighborhood'
-      path: '/api/vault/notes/neighborhood'
-      fullPath: '/api/vault/notes/neighborhood'
-      preLoaderRoute: typeof ApiVaultNotesNeighborhoodRouteImport
+    '/api/shared-spaces/proposals': {
+      id: '/api/shared-spaces/proposals'
+      path: '/api/shared-spaces/proposals'
+      fullPath: '/api/shared-spaces/proposals'
+      preLoaderRoute: typeof ApiSharedSpacesProposalsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vault/notes/by-path': {
-      id: '/api/vault/notes/by-path'
-      path: '/api/vault/notes/by-path'
-      fullPath: '/api/vault/notes/by-path'
-      preLoaderRoute: typeof ApiVaultNotesByPathRouteImport
+    '/api/vault/': {
+      id: '/api/vault/'
+      path: '/api/vault'
+      fullPath: '/api/vault/'
+      preLoaderRoute: typeof ApiVaultIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vault/notes/$slug': {
-      id: '/api/vault/notes/$slug'
-      path: '/api/vault/notes/$slug'
-      fullPath: '/api/vault/notes/$slug'
-      preLoaderRoute: typeof ApiVaultNotesSlugRouteImport
+    '/api/vault/assets': {
+      id: '/api/vault/assets'
+      path: '/api/vault/assets'
+      fullPath: '/api/vault/assets'
+      preLoaderRoute: typeof ApiVaultAssetsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vault/index/stats': {
-      id: '/api/vault/index/stats'
-      path: '/api/vault/index/stats'
-      fullPath: '/api/vault/index/stats'
-      preLoaderRoute: typeof ApiVaultIndexStatsRouteImport
+    '/api/vault/folders': {
+      id: '/api/vault/folders'
+      path: '/api/vault/folders'
+      fullPath: '/api/vault/folders'
+      preLoaderRoute: typeof ApiVaultFoldersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/shared-spaces/invites/redeem': {
-      id: '/api/shared-spaces/invites/redeem'
-      path: '/api/shared-spaces/invites/redeem'
-      fullPath: '/api/shared-spaces/invites/redeem'
-      preLoaderRoute: typeof ApiSharedSpacesInvitesRedeemRouteImport
+    '/api/vault/search': {
+      id: '/api/vault/search'
+      path: '/api/vault/search'
+      fullPath: '/api/vault/search'
+      preLoaderRoute: typeof ApiVaultSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/shared-spaces/$sharedSpaceId/revoke': {
-      id: '/api/shared-spaces/$sharedSpaceId/revoke'
-      path: '/revoke'
-      fullPath: '/api/shared-spaces/$sharedSpaceId/revoke'
-      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdRevokeRouteImport
+    '/api/vault/tree': {
+      id: '/api/vault/tree'
+      path: '/api/vault/tree'
+      fullPath: '/api/vault/tree'
+      preLoaderRoute: typeof ApiVaultTreeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/shared-spaces/$sharedSpaceId/extend': {
+      id: '/api/shared-spaces/$sharedSpaceId/extend'
+      path: '/extend'
+      fullPath: '/api/shared-spaces/$sharedSpaceId/extend'
+      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdExtendRouteImport
       parentRoute: typeof ApiSharedSpacesSharedSpaceIdRoute
     }
     '/api/shared-spaces/$sharedSpaceId/invites': {
@@ -489,12 +480,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdInvitesRouteImport
       parentRoute: typeof ApiSharedSpacesSharedSpaceIdRoute
     }
-    '/api/shared-spaces/$sharedSpaceId/extend': {
-      id: '/api/shared-spaces/$sharedSpaceId/extend'
-      path: '/extend'
-      fullPath: '/api/shared-spaces/$sharedSpaceId/extend'
-      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdExtendRouteImport
+    '/api/shared-spaces/$sharedSpaceId/read-link': {
+      id: '/api/shared-spaces/$sharedSpaceId/read-link'
+      path: '/read-link'
+      fullPath: '/api/shared-spaces/$sharedSpaceId/read-link'
+      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdReadLinkRouteImport
       parentRoute: typeof ApiSharedSpacesSharedSpaceIdRoute
+    }
+    '/api/shared-spaces/$sharedSpaceId/revoke': {
+      id: '/api/shared-spaces/$sharedSpaceId/revoke'
+      path: '/revoke'
+      fullPath: '/api/shared-spaces/$sharedSpaceId/revoke'
+      preLoaderRoute: typeof ApiSharedSpacesSharedSpaceIdRevokeRouteImport
+      parentRoute: typeof ApiSharedSpacesSharedSpaceIdRoute
+    }
+    '/api/shared-spaces/invites/redeem': {
+      id: '/api/shared-spaces/invites/redeem'
+      path: '/api/shared-spaces/invites/redeem'
+      fullPath: '/api/shared-spaces/invites/redeem'
+      preLoaderRoute: typeof ApiSharedSpacesInvitesRedeemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/index/stats': {
+      id: '/api/vault/index/stats'
+      path: '/api/vault/index/stats'
+      fullPath: '/api/vault/index/stats'
+      preLoaderRoute: typeof ApiVaultIndexStatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/': {
+      id: '/api/vault/notes/'
+      path: '/api/vault/notes'
+      fullPath: '/api/vault/notes/'
+      preLoaderRoute: typeof ApiVaultNotesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/$slug': {
+      id: '/api/vault/notes/$slug'
+      path: '/api/vault/notes/$slug'
+      fullPath: '/api/vault/notes/$slug'
+      preLoaderRoute: typeof ApiVaultNotesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/by-path': {
+      id: '/api/vault/notes/by-path'
+      path: '/api/vault/notes/by-path'
+      fullPath: '/api/vault/notes/by-path'
+      preLoaderRoute: typeof ApiVaultNotesByPathRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/notes/neighborhood': {
+      id: '/api/vault/notes/neighborhood'
+      path: '/api/vault/notes/neighborhood'
+      fullPath: '/api/vault/notes/neighborhood'
+      preLoaderRoute: typeof ApiVaultNotesNeighborhoodRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -502,6 +542,7 @@ declare module '@tanstack/react-router' {
 interface ApiSharedSpacesSharedSpaceIdRouteChildren {
   ApiSharedSpacesSharedSpaceIdExtendRoute: typeof ApiSharedSpacesSharedSpaceIdExtendRoute
   ApiSharedSpacesSharedSpaceIdInvitesRoute: typeof ApiSharedSpacesSharedSpaceIdInvitesRoute
+  ApiSharedSpacesSharedSpaceIdReadLinkRoute: typeof ApiSharedSpacesSharedSpaceIdReadLinkRoute
   ApiSharedSpacesSharedSpaceIdRevokeRoute: typeof ApiSharedSpacesSharedSpaceIdRevokeRoute
 }
 
@@ -511,6 +552,8 @@ const ApiSharedSpacesSharedSpaceIdRouteChildren: ApiSharedSpacesSharedSpaceIdRou
       ApiSharedSpacesSharedSpaceIdExtendRoute,
     ApiSharedSpacesSharedSpaceIdInvitesRoute:
       ApiSharedSpacesSharedSpaceIdInvitesRoute,
+    ApiSharedSpacesSharedSpaceIdReadLinkRoute:
+      ApiSharedSpacesSharedSpaceIdReadLinkRoute,
     ApiSharedSpacesSharedSpaceIdRevokeRoute:
       ApiSharedSpacesSharedSpaceIdRevokeRoute,
   }
@@ -531,6 +574,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSharedSpacesSharedSpaceIdRoute:
     ApiSharedSpacesSharedSpaceIdRouteWithChildren,
   ApiSharedSpacesProposalsRoute: ApiSharedSpacesProposalsRoute,
+  ApiVaultAssetsRoute: ApiVaultAssetsRoute,
   ApiVaultFoldersRoute: ApiVaultFoldersRoute,
   ApiVaultSearchRoute: ApiVaultSearchRoute,
   ApiVaultTreeRoute: ApiVaultTreeRoute,

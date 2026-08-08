@@ -11,6 +11,8 @@ export type VaultNoteLink = {
   resolved: boolean
   targetRelPath: string | null
   targetSlug: string | null
+  targetTitle?: string
+  inaccessible?: boolean
 }
 
 export type ParsedVaultNote = {

@@ -19,10 +19,15 @@ export const Route = createFileRoute('/api/vault/folders')({
         return getVaultFolderListingResponse(url.searchParams.get('path'), auth.principal ?? undefined)
       },
       POST: async ({ request }) => {
-        const { requireVaultPrincipal } = await import('../../../lib/auth/authorization')
+        const { requireVaultPrincipal, toVaultWriteAuthorizationResponse } = await import('../../../lib/auth/authorization')
         const auth = await requireVaultPrincipal(request)
         if (auth.response) {
           return auth.response
+        }
+
+        const writeAuthorization = toVaultWriteAuthorizationResponse(auth.principal)
+        if (writeAuthorization) {
+          return writeAuthorization
         }
 
         let body: unknown
@@ -42,10 +47,15 @@ export const Route = createFileRoute('/api/vault/folders')({
         return createVaultFolderResponse({ path: payload.path ?? null, principal: auth.principal ?? undefined })
       },
       DELETE: async ({ request }) => {
-        const { requireVaultPrincipal } = await import('../../../lib/auth/authorization')
+        const { requireVaultPrincipal, toVaultWriteAuthorizationResponse } = await import('../../../lib/auth/authorization')
         const auth = await requireVaultPrincipal(request)
         if (auth.response) {
           return auth.response
+        }
+
+        const writeAuthorization = toVaultWriteAuthorizationResponse(auth.principal)
+        if (writeAuthorization) {
+          return writeAuthorization
         }
 
         const url = new URL(request.url)

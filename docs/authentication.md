@@ -21,6 +21,21 @@ logs, URLs, error messages, or audit records. Send a redeemed token only as:
 Authorization: Bearer <scoped-access-token>
 ```
 
+Owners can issue a separate read-only browser/API capability with
+`POST /api/shared-spaces/:sharedSpaceId/read-link`. It is returned only inside
+the complete URL `/?path=<root>&token=<opaque-secret>`, is valid for 1–183 days
+but never beyond the parent lease, and is stored only as a SHA-256 hash. Each
+space has one active read link: issuing another rotates the previous one, while
+`DELETE /api/shared-spaces/:sharedSpaceId/read-link` revokes the current link
+without revoking the shared space. Treat the URL as a secret; do not put it in
+logs, Markdown, or ordinary workspace files.
+
+Read-link principals have read permission only. They can traverse the linked
+root and descendants through the UI and read APIs, but parent, sibling,
+prefix-collision, traversal, symlink, and outside-scope paths and assets are
+denied with generic unavailable responses. Token-bearing HTML, API, and asset
+responses use private no-store caching and no-referrer policy.
+
 Shared tokens are checked against server time on every request. A valid token
 can reach only `rootPath` or descendants using segment-aware matching; a path
 such as `little-helpers-private` is not a descendant of `little-helpers`.
