@@ -10,6 +10,7 @@
     "build": "vite build",
     "verify:build": "node scripts/verify-production-assets.mjs",
     "verify:server": "node scripts/verify-production-server.mjs",
+    "verify:deployment": "node scripts/verify-deployment.mjs",
     "start": "node .output/server/index.mjs",
     "preview": "vite preview",
     "lint": "eslint .",

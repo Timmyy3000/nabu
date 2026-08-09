@@ -41,8 +41,10 @@ async function fixture() {
   await mkdir(path.join(vaultRoot, 'little-helpers'), { recursive: true })
   await writeFile(
     path.join(vaultRoot, 'little-helpers', 'shared.md'),
-    '---\nsummary: Public summary\ntags: [shared]\nauthors: [Nabu]\nprivateMetadata: do-not-share\nsource: private.md\nreferences:\n  - private.md\n---\n# Shared\n\n**Author:** Nabu\n\n**Source:** private.md\n\n**References:** [[private.md]]\n\n[[private.md]]\n\n[Secret file](../private.txt)\n\n![Private image](../private.png)',
+    '---\nsummary: Public summary\ntags: [shared]\nauthors: [Nabu]\nprivateMetadata: do-not-share\nsource: private.md\nreferences:\n  - private.md\n---\n# Shared\n\n**Author:** Nabu\n\n**Source:** private.md\n\n**References:** [[private.md]]\n\n[[nested|Nested note]]\n\n![Shared image](nested.png)\n\n[[private.md]]\n\n[Secret file](../private.txt)\n\n![Private image](../private.png)',
   )
+  await writeFile(path.join(vaultRoot, 'little-helpers', 'nested.md'), '# Nested')
+  await writeFile(path.join(vaultRoot, 'little-helpers', 'nested.png'), 'shared image')
   await writeFile(path.join(vaultRoot, 'private.md'), '# Private\n\n[[little-helpers/shared.md]]')
   process.env.KNOWLEDGE_PATH = vaultRoot
   process.env.NABU_DATA_PATH = dataRoot
@@ -98,7 +100,9 @@ describe('shared vault access', () => {
     const neighborhoodPayload = await neighborhood.json()
     expect(neighborhood.status).toBe(200)
     expect(neighborhoodPayload.backlinks).toEqual([])
-    expect(neighborhoodPayload.outgoing).toEqual([])
+    expect(neighborhoodPayload.outgoing).toEqual([
+      expect.objectContaining({ targetRelPath: 'little-helpers/nested.md' }),
+    ])
     expect(neighborhoodPayload.unresolvedOutgoing).toEqual([])
 
     await writeFile(path.join(process.env.KNOWLEDGE_PATH!, 'little-helpers', 'nested.md'), '# Nested')
@@ -121,7 +125,17 @@ describe('shared vault access', () => {
     expect(read.headers.get('cache-control')).toBe('private, no-store')
     expect(read.headers.get('referrer-policy')).toBe('no-referrer')
     expect(payload.note.body).toContain('Non-accessible link')
-    expect(payload.note.outgoingLinks).toHaveLength(3)
+    expect(payload.note.body).toContain('[[nested|Nested note]]')
+    expect(payload.note.body).toContain('![Shared image](nested.png)')
+    expect(payload.note.outgoingLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resolved: true,
+          targetRelPath: 'little-helpers/nested.md',
+        }),
+      ]),
+    )
+    expect(payload.note.outgoingLinks).toHaveLength(4)
     expect(payload.note.outgoingLinks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
