@@ -425,7 +425,7 @@ function createStore(databasePath: string): SharedSpaceStore {
           expires_at: row.space_expires_at,
           revoked_at: row.space_revoked_at,
         })
-        if (invite.expiresAt <= input.now || space.expiresAt <= input.now || space.revokedAt != null) {
+        if (space.expiresAt <= input.now || space.revokedAt != null) {
           return null
         }
 
@@ -439,6 +439,10 @@ function createStore(databasePath: string): SharedSpaceStore {
           }
 
           return { space, invite }
+        }
+
+        if (invite.expiresAt <= input.now) {
+          return null
         }
 
         const redeemed = db.prepare(`

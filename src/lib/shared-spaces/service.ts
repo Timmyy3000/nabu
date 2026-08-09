@@ -432,7 +432,7 @@ export class SharedSpaceService {
     const inviteContext = store.getInviteContext(hashSecret(secret))
     if (
       !inviteContext ||
-      inviteContext.invite.expiresAt <= now ||
+      (inviteContext.invite.redeemedAt == null && inviteContext.invite.expiresAt <= now) ||
       inviteContext.space.expiresAt <= now ||
       inviteContext.space.revokedAt != null
     ) {
@@ -502,12 +502,7 @@ export class SharedSpaceService {
     return toDetails(store.getSpace(space.id) ?? { ...space, revokedAt: this.now() })
   }
 
-  async createSharedSpaceInvite(input: { ownerPrincipalId: string; sharedSpaceId: string; baseUrl?: string }): Promise<{
-    sharedSpaceId: string
-    inviteUrl: string
-    inviteExpiresAt: string
-    inviteUsesRemaining: 1
-  }> {
+  async createSharedSpaceInvite(input: { ownerPrincipalId: string; sharedSpaceId: string; baseUrl?: string }): Promise<SharedSpaceInviteResult> {
     const store = await getSharedSpaceStore()
     const space = store.getSpace(input.sharedSpaceId)
     const now = this.now()
@@ -528,9 +523,14 @@ export class SharedSpaceService {
     })
     return {
       sharedSpaceId: space.id,
+      rootPath: space.rootPath,
+      permissions: space.permissions,
+      sharedSpaceExpiresAt: iso(space.expiresAt),
       inviteUrl: inviteUrl(canonicalBaseUrl, secret),
       inviteExpiresAt: iso(inviteExpiresAt),
       inviteUsesRemaining: 1,
+      contractVersion: 2,
+      redemption: redemptionContract(iso(inviteExpiresAt)),
     }
   }
 

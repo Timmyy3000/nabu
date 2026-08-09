@@ -26,6 +26,7 @@ export const SHARED_SPACE_AGENT_CONTRACT = {
       'NABU_ACCESS_TOKEN_EXPIRES_AT',
       'NABU_ACCESS_TOKEN',
     ],
+    deploymentIdAlgorithm: 'sha256-<64 lowercase hex SHA-256 of canonical API base UTF-8 bytes>',
     deploymentIdPlaceholder: '<deployment-id>',
     sharedSpaceIdPlaceholder: '<shared-space-id>',
     codexPath: '~/.codex/secrets/nabu/<deployment-id>/<shared-space-id>.env',

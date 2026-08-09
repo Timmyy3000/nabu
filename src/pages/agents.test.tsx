@@ -35,7 +35,9 @@ describe('renderAgentsMarkdown', () => {
 
     expect(markdown).toContain('`contractVersion: 2`')
     expect(markdown).toContain('Idempotency-Key')
-    expect(markdown).toContain('same invite/key pair')
+    expect(markdown).toContain('exact same invite and key')
+    expect(markdown).toContain('make at most one recovery request')
+    expect(markdown).toContain('version-1 `410`')
     expect(markdown).toContain('deployment-base-relative suffix')
     expect(markdown).toContain('do not resolve it as an origin-root URL')
     expect(markdown).toContain('tree')
@@ -46,6 +48,9 @@ describe('renderAgentsMarkdown', () => {
       expect(markdown).toContain(key)
     }
     expect(markdown).toContain('NABU_CREDENTIALS_DIR')
+    expect(markdown).toContain(SHARED_SPACE_AGENT_CONTRACT.profile.deploymentIdAlgorithm)
+    expect(markdown).toContain('Discard profiles without the permission required by the operation')
+    expect(markdown).toContain('not persisted as an eighth key')
     expect(markdown).toContain(SHARED_SPACE_AGENT_CONTRACT.profile.codexPath)
     expect(markdown).toContain(SHARED_SPACE_AGENT_CONTRACT.profile.hermesPath)
     expect(markdown).toContain('legacy Hermes single-file')

@@ -223,6 +223,48 @@ describe('shared-space service', () => {
       .rejects.toMatchObject({ code: 'SHARED_SPACE_INVITE_INVALID', status: 410 })
   })
 
+  it('replays an already-redeemed invite with the same key after the invite TTL', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    let now = 1_000
+    const service = new SharedSpaceService({ now: () => now, baseUrl: 'https://nabu.example' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+    const key = 'recovery-key-12345678901234567890'
+    const first = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: key })
+
+    now += INVITE_TTL_MS + 1
+    const recovered = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: key })
+
+    expect(recovered.accessToken).toBe(first.accessToken)
+    expect(recovered.sharedSpaceId).toBe(first.sharedSpaceId)
+    await expect(service.redeemSharedSpaceInvite({
+      inviteUrl: confirmed.inviteUrl,
+      idempotencyKey: 'different-key-123456789012345678',
+    })).rejects.toMatchObject({ code: 'SHARED_SPACE_INVITE_INVALID', status: 410 })
+  })
+
+  it('describes redemption for replacement invites on an existing shared space', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example/base' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+
+    const replacement = await service.createSharedSpaceInvite({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })
+
+    expect(replacement).toMatchObject({
+      sharedSpaceId: confirmed.sharedSpaceId,
+      rootPath: 'little-helpers',
+      permissions: confirmed.permissions,
+      sharedSpaceExpiresAt: confirmed.sharedSpaceExpiresAt,
+      contractVersion: 2,
+      redemption: {
+        endpoint: '/api/shared-spaces/invites/redeem',
+        idempotencyHeader: 'Idempotency-Key',
+        idempotencyRequired: true,
+      },
+    })
+  })
+
   it('canonicalizes equivalent version-2 permission order during consent', async () => {
     await createFixture({ 'little-helpers/readme.md': '# Helpers' })
     const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example' })
