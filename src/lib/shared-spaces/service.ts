@@ -2,14 +2,17 @@ import { lstat, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { normalizeVaultPath } from '../paths'
 import { getVaultConfig } from '../vault/config'
-import { generateId, generateOpaqueSecret, hashSecret } from './crypto'
+import { deriveIdempotentAccessToken, generateId, generateOpaqueSecret, hashSecret, isValidIdempotencyKey } from './crypto'
 import { getSharedSpaceStore, __resetSharedSpaceStoreForTests } from './store'
+import { resolveCanonicalLink, resolveCanonicalPath, resolveCanonicalPublicUrl } from './public-url'
 import type {
   SharedSpaceDetails,
   SharedSpacePermission,
   SharedSpacePreview,
   SharedSpaceReadLinkRecord,
   SharedSpaceRecord,
+  SharedSpaceRedemptionContract,
+  SharedSpaceRedemptionLinks,
 } from './types'
 
 export const DEFAULT_SHARED_SPACE_DURATION_DAYS = 7
@@ -25,6 +28,7 @@ export class SharedSpaceError extends Error {
     message: string,
     public readonly code: string,
     public readonly status: number = 400,
+    public readonly nextAction?: string,
   ) {
     super(message)
     this.name = 'SharedSpaceError'
@@ -40,6 +44,8 @@ type SharedSpaceProposalInput = {
   ownerPrincipalId: string
   path: string | null | undefined
   durationDays?: number | null
+  permissions?: SharedSpacePermission[] | null
+  contractVersion?: number | null
 }
 
 type SharedSpaceConfirmationInput = {
@@ -48,6 +54,8 @@ type SharedSpaceConfirmationInput = {
   confirmed: boolean
   durationDays?: number | null
   permissions?: SharedSpacePermission[] | null
+  path?: string | null
+  contractVersion?: number | null
   baseUrl?: string
 }
 
@@ -59,6 +67,8 @@ type SharedSpaceInviteResult = {
   inviteUrl: string
   inviteExpiresAt: string
   inviteUsesRemaining: 1
+  contractVersion: 2
+  redemption: SharedSpaceRedemptionContract
 }
 
 type SharedSpaceRedemptionResult = {
@@ -68,6 +78,10 @@ type SharedSpaceRedemptionResult = {
   sharedSpaceExpiresAt: string
   accessToken: string
   accessTokenExpiresAt: string
+  contractVersion: 2
+  profileId: string
+  nextAction: 'save_credential_profile'
+  links: SharedSpaceRedemptionLinks
 }
 
 export type SharedSpaceReadLinkResult = {
@@ -200,28 +214,58 @@ function normalizePermissions(permissions: SharedSpacePermission[] | null | unde
   if (normalized.length === 0 || !normalized.includes('read') || normalized.some((permission) => permission !== 'read' && permission !== 'write')) {
     throw new SharedSpaceError('Shared-space permissions must include read and may include write.', 'SHARED_SPACE_PERMISSIONS_INVALID')
   }
-  return normalized
+  return (['read', 'write'] as const).filter((permission) => normalized.includes(permission))
 }
 
 function inviteUrl(baseUrl: string, secret: string): string {
-  return new URL(`/invites/${secret}`, baseUrl).toString()
+  return resolveCanonicalLink(baseUrl, `/invites/${encodeURIComponent(secret)}`).toString()
 }
 
 function readLinkUrl(baseUrl: string, rootPath: string, secret: string): string {
-  const url = new URL('/', baseUrl)
+  const url = resolveCanonicalLink(baseUrl, '/')
   url.searchParams.set('path', rootPath)
   url.searchParams.set('token', secret)
   return url.toString()
+}
+
+function profileId(baseUrl: string, sharedSpaceId: string): string {
+  return `nabu-profile-${hashSecret(`${baseUrl}\n${sharedSpaceId}`).slice(0, 32)}`
+}
+
+function redemptionLinks(baseUrl: string): SharedSpaceRedemptionLinks {
+  const prefix = resolveCanonicalPath(baseUrl, '')
+  const route = (value: string) => `${prefix}${prefix.endsWith('/') || value.startsWith('/') ? '' : '/'}${value}`
+  return {
+    tree: route('api/vault/tree'),
+    rootFolder: route('api/vault/folders?path={rootPath}'),
+    noteByPath: route('api/vault/notes/by-path?path={path}'),
+    search: route('api/vault/search?path={rootPath}&q={query}'),
+  }
+}
+
+function redemptionContract(baseUrl: string, expiresAt: string): SharedSpaceRedemptionContract {
+  const prefix = resolveCanonicalPath(baseUrl, '')
+  const endpoint = `${prefix}${prefix.endsWith('/') ? '' : '/'}api/shared-spaces/invites/redeem`
+  return {
+    contractVersion: 2,
+    endpoint,
+    method: 'POST',
+    bodyField: 'inviteUrl',
+    idempotencyHeader: 'Idempotency-Key',
+    idempotencyRequired: true,
+    expiresAt,
+    nextAction: 'redeem_and_save_profile',
+  }
 }
 
 function extractInviteSecret(value: string): string {
   try {
     const url = new URL(value)
     const segments = url.pathname.split('/').filter(Boolean)
-    if (segments.length !== 2 || segments[0] !== 'invites' || !segments[1]) {
+    if (segments.length < 2 || segments.at(-2) !== 'invites' || !segments.at(-1)) {
       throw new Error('invalid invite path')
     }
-    return decodeURIComponent(segments[1])
+    return decodeURIComponent(segments.at(-1)!)
   } catch {
     throw new SharedSpaceError('The invite is invalid or expired.', 'SHARED_SPACE_INVITE_INVALID', 410)
   }
@@ -243,11 +287,22 @@ export class SharedSpaceService {
 
   constructor(options: SharedSpaceServiceOptions = {}) {
     this.now = options.now ?? (() => Date.now())
-    this.baseUrl = options.baseUrl ?? process.env.NABU_PUBLIC_URL?.trim() ?? 'http://localhost:3000'
+    this.baseUrl = resolveCanonicalPublicUrl({ configuredBaseUrl: options.baseUrl })
   }
 
   async proposeSharedSpace(input: SharedSpaceProposalInput): Promise<SharedSpacePreview> {
-    normalizeDuration(input.durationDays)
+    const isVersion2 = input.contractVersion === 2
+    if (input.contractVersion != null && input.contractVersion !== 2) {
+      throw new SharedSpaceError('The proposal contract version is unsupported.', 'SHARED_SPACE_CONTRACT_VERSION_UNSUPPORTED')
+    }
+    const durationDays = normalizeDuration(input.durationDays)
+    const permissions = isVersion2 ? normalizePermissions(input.permissions) : null
+    if (isVersion2 && typeof input.durationDays !== 'number') {
+      throw new SharedSpaceError('Version-2 proposals must include durationDays.', 'SHARED_SPACE_DURATION_INVALID')
+    }
+    if (isVersion2 && !Array.isArray(input.permissions)) {
+      throw new SharedSpaceError('Version-2 proposals must include permissions.', 'SHARED_SPACE_PERMISSIONS_INVALID')
+    }
     const rootPath = normalizeSharedRoot(input.path)
     const { rootPath: vaultRoot } = await getVaultConfig()
     const absoluteRoot = await resolveRealSharedRoot(vaultRoot, rootPath)
@@ -264,6 +319,7 @@ export class SharedSpaceService {
       warnings: [LIVE_SCOPE_WARNING],
       liveRecursiveScope: true,
       expiresAt: iso(now + PROPOSAL_TTL_MS),
+      ...(isVersion2 ? { contractVersion: 2 as const, durationDays, permissions: permissions! } : {}),
     }
     const store = await getSharedSpaceStore()
     store.createProposal({
@@ -273,6 +329,7 @@ export class SharedSpaceService {
       preview,
       createdAt: now,
       expiresAt: now + PROPOSAL_TTL_MS,
+      ...(isVersion2 ? { contractVersion: 2 as const, requestedDurationDays: durationDays, requestedPermissions: permissions! } : {}),
     })
     return preview
   }
@@ -281,14 +338,49 @@ export class SharedSpaceService {
     if (input.confirmed !== true) {
       throw new SharedSpaceError('Explicit confirmation is required before sharing.', 'SHARED_SPACE_CONFIRMATION_REQUIRED')
     }
-    const durationDays = normalizeDuration(input.durationDays)
-    const permissions = normalizePermissions(input.permissions)
     const now = this.now()
     const store = await getSharedSpaceStore()
     const proposal = store.getProposal(input.proposalId)
-    if (!proposal || proposal.ownerPrincipalId !== input.ownerPrincipalId || proposal.expiresAt <= now || proposal.consumedAt != null) {
+    if (!proposal || proposal.ownerPrincipalId !== input.ownerPrincipalId) {
       throw new SharedSpaceError('The sharing proposal is invalid or expired.', 'SHARED_SPACE_PROPOSAL_INVALID', 410)
     }
+    if (proposal.consumedAt != null) {
+      throw new SharedSpaceError('The sharing proposal is invalid or expired.', 'SHARED_SPACE_PROPOSAL_INVALID', 410)
+    }
+    const proposalVersion = proposal.contractVersion === 2 ? 2 : 1
+    if (proposal.expiresAt <= now) {
+      if (proposalVersion === 1) {
+        throw new SharedSpaceError('The sharing proposal is invalid or expired.', 'SHARED_SPACE_PROPOSAL_INVALID', 410)
+      }
+      throw new SharedSpaceError(
+        'The sharing proposal expired. Create a new proposal to continue.',
+        'SHARED_SPACE_PROPOSAL_EXPIRED',
+        410,
+        'create_new_proposal',
+      )
+    }
+
+    if (proposalVersion === 2) {
+      if (input.contractVersion != null && input.contractVersion !== 2) {
+        throw new SharedSpaceError('The confirmation does not match the proposal contract.', 'SHARED_SPACE_PROPOSAL_CONSENT_MISMATCH')
+      }
+      if (input.path != null && normalizeSharedRoot(input.path) !== proposal.rootPath) {
+        throw new SharedSpaceError('The confirmation does not match the proposed scope.', 'SHARED_SPACE_PROPOSAL_CONSENT_MISMATCH')
+      }
+      if (input.durationDays != null && input.durationDays !== proposal.requestedDurationDays) {
+        throw new SharedSpaceError('The confirmation does not match the proposed duration.', 'SHARED_SPACE_PROPOSAL_CONSENT_MISMATCH')
+      }
+      if (input.permissions != null && JSON.stringify(normalizePermissions(input.permissions)) !== JSON.stringify(proposal.requestedPermissions ?? [])) {
+        throw new SharedSpaceError('The confirmation does not match the proposed permissions.', 'SHARED_SPACE_PROPOSAL_CONSENT_MISMATCH')
+      }
+    }
+
+    const durationDays = proposalVersion === 2
+      ? proposal.requestedDurationDays ?? normalizeDuration(input.durationDays)
+      : normalizeDuration(input.durationDays)
+    const permissions = proposalVersion === 2
+      ? proposal.requestedPermissions ?? normalizePermissions(input.permissions)
+      : normalizePermissions(input.permissions)
     const { rootPath: vaultRoot } = await getVaultConfig()
     await resolveRealSharedRoot(vaultRoot, proposal.rootPath)
 
@@ -327,22 +419,27 @@ export class SharedSpaceService {
       rootPath: space.rootPath,
       permissions: space.permissions,
       sharedSpaceExpiresAt: iso(space.expiresAt),
-      inviteUrl: inviteUrl(input.baseUrl ?? this.baseUrl, secret),
+      inviteUrl: inviteUrl(resolveCanonicalPublicUrl({ configuredBaseUrl: input.baseUrl ?? this.baseUrl }), secret),
       inviteExpiresAt: iso(invite.expiresAt),
       inviteUsesRemaining: 1,
+      contractVersion: 2,
+      redemption: redemptionContract(resolveCanonicalPublicUrl({ configuredBaseUrl: input.baseUrl ?? this.baseUrl }), iso(invite.expiresAt)),
     }
   }
 
-  async redeemSharedSpaceInvite(input: { inviteUrl: string }): Promise<SharedSpaceRedemptionResult> {
+  async redeemSharedSpaceInvite(input: { inviteUrl: string; idempotencyKey?: string | null }): Promise<SharedSpaceRedemptionResult> {
     const secret = extractInviteSecret(input.inviteUrl)
+    const idempotencyKey = input.idempotencyKey ?? null
+    if (idempotencyKey != null && !isValidIdempotencyKey(idempotencyKey)) {
+      throw new SharedSpaceError('The Idempotency-Key is invalid.', 'SHARED_SPACE_IDEMPOTENCY_KEY_INVALID')
+    }
     const now = this.now()
-    const accessToken = generateOpaqueSecret()
+    const accessToken = idempotencyKey == null ? generateOpaqueSecret() : deriveIdempotentAccessToken(secret, idempotencyKey)
     const principalId = generateId('member')
     const store = await getSharedSpaceStore()
     const inviteContext = store.getInviteContext(hashSecret(secret))
     if (
       !inviteContext ||
-      inviteContext.invite.redeemedAt != null ||
       inviteContext.invite.expiresAt <= now ||
       inviteContext.space.expiresAt <= now ||
       inviteContext.space.revokedAt != null
@@ -368,11 +465,13 @@ export class SharedSpaceService {
         sharedSpaceExpiresAt: inviteContext.space.expiresAt,
         sharedSpaceRevokedAt: inviteContext.space.revokedAt,
       },
+      idempotencyKeyHash: idempotencyKey == null ? null : hashSecret(idempotencyKey),
     })
     if (!inviteResult) {
       throw new SharedSpaceError('The invite is invalid or expired.', 'SHARED_SPACE_INVITE_INVALID', 410)
     }
 
+    const baseUrl = this.baseUrl
     return {
       sharedSpaceId: inviteResult.space.id,
       rootPath: inviteResult.space.rootPath,
@@ -380,6 +479,10 @@ export class SharedSpaceService {
       sharedSpaceExpiresAt: iso(inviteResult.space.expiresAt),
       accessToken,
       accessTokenExpiresAt: iso(inviteResult.space.expiresAt),
+      contractVersion: 2,
+      profileId: profileId(baseUrl, inviteResult.space.id),
+      nextAction: 'save_credential_profile',
+      links: redemptionLinks(baseUrl),
     }
   }
 
@@ -421,6 +524,7 @@ export class SharedSpaceService {
     }
     const secret = generateOpaqueSecret()
     const inviteExpiresAt = Math.min(now + INVITE_TTL_MS, space.expiresAt)
+    const canonicalBaseUrl = resolveCanonicalPublicUrl({ configuredBaseUrl: input.baseUrl ?? this.baseUrl })
     store.createInvite({
       id: generateId('invite'),
       sharedSpaceId: space.id,
@@ -432,7 +536,7 @@ export class SharedSpaceService {
     })
     return {
       sharedSpaceId: space.id,
-      inviteUrl: inviteUrl(input.baseUrl ?? this.baseUrl, secret),
+      inviteUrl: inviteUrl(canonicalBaseUrl, secret),
       inviteExpiresAt: iso(inviteExpiresAt),
       inviteUsesRemaining: 1,
     }
@@ -477,6 +581,7 @@ export class SharedSpaceService {
 
     const secret = generateOpaqueSecret()
     const expiresAt = Math.min(now + durationDays * SHARED_SPACE_DAY_MS, space.expiresAt)
+    const canonicalBaseUrl = resolveCanonicalPublicUrl({ configuredBaseUrl: input.baseUrl ?? this.baseUrl })
     const link = store.rotateReadLink({
       id: generateId('read-link'),
       sharedSpaceId: space.id,
@@ -490,7 +595,7 @@ export class SharedSpaceService {
       sharedSpaceId: space.id,
       rootPath: space.rootPath,
       permission: 'read',
-      shareUrl: readLinkUrl(input.baseUrl ?? this.baseUrl, space.rootPath, secret),
+      shareUrl: readLinkUrl(canonicalBaseUrl, space.rootPath, secret),
       durationDays,
       expiresAt: iso(link.expiresAt),
     }

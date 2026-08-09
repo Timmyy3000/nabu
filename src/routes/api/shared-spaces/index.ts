@@ -42,7 +42,8 @@ export const Route = createFileRoute('/api/shared-spaces/')({
             confirmed: body.confirmed === true,
             durationDays: typeof body.durationDays === 'number' ? body.durationDays : null,
             permissions: Array.isArray(body.permissions) ? body.permissions as never[] : null,
-            baseUrl: new URL(request.url).origin,
+            path: typeof body.path === 'string' ? body.path : null,
+            contractVersion: typeof body.contractVersion === 'number' ? body.contractVersion : null,
           })
           return Response.json(result, { status: 201 })
         } catch (error) {

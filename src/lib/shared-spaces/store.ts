@@ -44,6 +44,7 @@ export type SharedSpaceStore = {
     now: number
     principalId: string
     accessToken: AccessTokenInput
+    idempotencyKeyHash?: string | null
   }) => { space: SharedSpaceRecord; invite: SharedSpaceInviteRecord } | null
   findAccessToken: (tokenHash: string, now: number) => SharedSpaceAccessTokenRecord | null
   touchAccessToken: (id: string, now: number) => void
@@ -101,6 +102,7 @@ function mapSpace(row: SqlRow): SharedSpaceRecord {
 }
 
 function mapProposal(row: SqlRow): SharedSpaceProposalRecord {
+  const contractVersion = asNumber(row.contract_version)
   return {
     id: asString(row.id),
     ownerPrincipalId: asString(row.owner_principal_id),
@@ -109,6 +111,9 @@ function mapProposal(row: SqlRow): SharedSpaceProposalRecord {
     createdAt: asNumber(row.created_at),
     expiresAt: asNumber(row.expires_at),
     consumedAt: asNullableNumber(row.consumed_at),
+    contractVersion: contractVersion === 2 ? 2 : 1,
+    requestedDurationDays: row.requested_duration_days == null ? null : asNumber(row.requested_duration_days),
+    requestedPermissions: row.requested_permissions_json == null ? null : asPermissions(row.requested_permissions_json),
   }
 }
 
@@ -121,6 +126,9 @@ function mapInvite(row: SqlRow): SharedSpaceInviteRecord {
     expiresAt: asNumber(row.expires_at),
     redeemedAt: asNullableNumber(row.redeemed_at),
     redeemedByPrincipalId: row.redeemed_by_principal_id == null ? null : asString(row.redeemed_by_principal_id),
+    idempotencyKeyHash: row.idempotency_key_hash == null ? null : asString(row.idempotency_key_hash),
+    accessTokenHash: row.access_token_hash == null ? null : asString(row.access_token_hash),
+    accessTokenId: row.access_token_id == null ? null : asString(row.access_token_id),
   }
 }
 
@@ -183,7 +191,10 @@ function createStore(databasePath: string): SharedSpaceStore {
       preview_json TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL,
-      consumed_at INTEGER
+      consumed_at INTEGER,
+      contract_version INTEGER,
+      requested_duration_days INTEGER,
+      requested_permissions_json TEXT
     );
     CREATE TABLE IF NOT EXISTS shared_spaces (
       id TEXT PRIMARY KEY,
@@ -201,7 +212,10 @@ function createStore(databasePath: string): SharedSpaceStore {
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL,
       redeemed_at INTEGER,
-      redeemed_by_principal_id TEXT
+      redeemed_by_principal_id TEXT,
+      idempotency_key_hash TEXT,
+      access_token_hash TEXT,
+      access_token_id TEXT
     );
     CREATE TABLE IF NOT EXISTS shared_space_access_tokens (
       id TEXT PRIMARY KEY,
@@ -228,12 +242,24 @@ function createStore(databasePath: string): SharedSpaceStore {
     CREATE INDEX IF NOT EXISTS idx_shared_spaces_owner ON shared_spaces(owner_principal_id);
   `)
 
+  // Existing deployments predate the v2 columns. Keep the migration local to
+  // this store so reopening the same durable database is sufficient.
+  const proposalColumns = db.prepare('PRAGMA table_info(shared_space_proposals)').all() as SqlRow[]
+  const inviteColumns = db.prepare('PRAGMA table_info(shared_space_invites)').all() as SqlRow[]
+  const hasColumn = (columns: SqlRow[], name: string) => columns.some((column) => asString(column.name) === name)
+  if (!hasColumn(proposalColumns, 'contract_version')) db.exec('ALTER TABLE shared_space_proposals ADD COLUMN contract_version INTEGER')
+  if (!hasColumn(proposalColumns, 'requested_duration_days')) db.exec('ALTER TABLE shared_space_proposals ADD COLUMN requested_duration_days INTEGER')
+  if (!hasColumn(proposalColumns, 'requested_permissions_json')) db.exec('ALTER TABLE shared_space_proposals ADD COLUMN requested_permissions_json TEXT')
+  if (!hasColumn(inviteColumns, 'idempotency_key_hash')) db.exec('ALTER TABLE shared_space_invites ADD COLUMN idempotency_key_hash TEXT')
+  if (!hasColumn(inviteColumns, 'access_token_hash')) db.exec('ALTER TABLE shared_space_invites ADD COLUMN access_token_hash TEXT')
+  if (!hasColumn(inviteColumns, 'access_token_id')) db.exec('ALTER TABLE shared_space_invites ADD COLUMN access_token_id TEXT')
+
   return {
     createProposal(proposal) {
       db.prepare(`
         INSERT INTO shared_space_proposals
-          (id, owner_principal_id, root_path, preview_json, created_at, expires_at, consumed_at)
-        VALUES (?, ?, ?, ?, ?, ?, NULL)
+          (id, owner_principal_id, root_path, preview_json, created_at, expires_at, consumed_at, contract_version, requested_duration_days, requested_permissions_json)
+        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
       `).run(
         proposal.id,
         proposal.ownerPrincipalId,
@@ -241,6 +267,9 @@ function createStore(databasePath: string): SharedSpaceStore {
         JSON.stringify(proposal.preview),
         proposal.createdAt,
         proposal.expiresAt,
+        proposal.contractVersion ?? null,
+        proposal.requestedDurationDays ?? null,
+        proposal.requestedPermissions == null ? null : serializePermissions(proposal.requestedPermissions),
       )
     },
 
@@ -285,8 +314,8 @@ function createStore(databasePath: string): SharedSpaceStore {
         )
         db.prepare(`
           INSERT INTO shared_space_invites
-            (id, shared_space_id, token_hash, created_at, expires_at, redeemed_at, redeemed_by_principal_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+            (id, shared_space_id, token_hash, created_at, expires_at, redeemed_at, redeemed_by_principal_id, idempotency_key_hash, access_token_hash, access_token_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           input.invite.id,
           input.invite.sharedSpaceId,
@@ -295,6 +324,9 @@ function createStore(databasePath: string): SharedSpaceStore {
           input.invite.expiresAt,
           input.invite.redeemedAt,
           input.invite.redeemedByPrincipalId,
+          input.invite.idempotencyKeyHash ?? null,
+          input.invite.accessTokenHash ?? null,
+          input.invite.accessTokenId ?? null,
         )
 
         return { space: input.space, invite: input.invite }
@@ -316,8 +348,8 @@ function createStore(databasePath: string): SharedSpaceStore {
     createInvite(invite) {
       db.prepare(`
         INSERT INTO shared_space_invites
-          (id, shared_space_id, token_hash, created_at, expires_at, redeemed_at, redeemed_by_principal_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+          (id, shared_space_id, token_hash, created_at, expires_at, redeemed_at, redeemed_by_principal_id, idempotency_key_hash, access_token_hash, access_token_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         invite.id,
         invite.sharedSpaceId,
@@ -326,6 +358,9 @@ function createStore(databasePath: string): SharedSpaceStore {
         invite.expiresAt,
         invite.redeemedAt,
         invite.redeemedByPrincipalId,
+        invite.idempotencyKeyHash ?? null,
+        invite.accessTokenHash ?? null,
+        invite.accessTokenId ?? null,
       )
     },
 
@@ -390,15 +425,35 @@ function createStore(databasePath: string): SharedSpaceStore {
           expires_at: row.space_expires_at,
           revoked_at: row.space_revoked_at,
         })
-        if (invite.redeemedAt != null || invite.expiresAt <= input.now || space.expiresAt <= input.now || space.revokedAt != null) {
+        if (invite.expiresAt <= input.now || space.expiresAt <= input.now || space.revokedAt != null) {
           return null
+        }
+
+        if (invite.redeemedAt != null) {
+          if (
+            !input.idempotencyKeyHash ||
+            invite.idempotencyKeyHash !== input.idempotencyKeyHash ||
+            invite.accessTokenHash !== input.accessToken.tokenHash
+          ) {
+            return null
+          }
+
+          return { space, invite }
         }
 
         const redeemed = db.prepare(`
           UPDATE shared_space_invites
-          SET redeemed_at = ?, redeemed_by_principal_id = ?
+          SET redeemed_at = ?, redeemed_by_principal_id = ?, idempotency_key_hash = ?, access_token_hash = ?, access_token_id = ?
           WHERE id = ? AND redeemed_at IS NULL AND expires_at > ?
-        `).run(input.now, input.principalId, invite.id, input.now)
+        `).run(
+          input.now,
+          input.principalId,
+          input.idempotencyKeyHash ?? null,
+          input.accessToken.tokenHash,
+          input.accessToken.id,
+          invite.id,
+          input.now,
+        )
         if (changedRows(redeemed) !== 1) {
           return null
         }
@@ -421,7 +476,14 @@ function createStore(databasePath: string): SharedSpaceStore {
 
         return {
           space,
-          invite: { ...invite, redeemedAt: input.now, redeemedByPrincipalId: input.principalId },
+          invite: {
+            ...invite,
+            redeemedAt: input.now,
+            redeemedByPrincipalId: input.principalId,
+            idempotencyKeyHash: input.idempotencyKeyHash ?? null,
+            accessTokenHash: input.accessToken.tokenHash,
+            accessTokenId: input.accessToken.id,
+          },
         }
       })
     },

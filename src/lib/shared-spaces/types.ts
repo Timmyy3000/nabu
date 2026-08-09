@@ -10,6 +10,9 @@ export type SharedSpacePreview = {
   warnings: string[]
   liveRecursiveScope: true
   expiresAt: string
+  contractVersion?: 2
+  durationDays?: number
+  permissions?: SharedSpacePermission[]
 }
 
 export type SharedSpaceProposalRecord = {
@@ -20,6 +23,9 @@ export type SharedSpaceProposalRecord = {
   createdAt: number
   expiresAt: number
   consumedAt: number | null
+  contractVersion?: 1 | 2
+  requestedDurationDays?: number | null
+  requestedPermissions?: SharedSpacePermission[] | null
 }
 
 export type SharedSpaceRecord = {
@@ -40,6 +46,9 @@ export type SharedSpaceInviteRecord = {
   expiresAt: number
   redeemedAt: number | null
   redeemedByPrincipalId: string | null
+  idempotencyKeyHash?: string | null
+  accessTokenHash?: string | null
+  accessTokenId?: string | null
 }
 
 export type SharedSpaceAccessTokenRecord = {
@@ -75,4 +84,22 @@ export type SharedSpaceDetails = {
   permissions: SharedSpacePermission[]
   sharedSpaceExpiresAt: string
   revokedAt: string | null
+}
+
+export type SharedSpaceRedemptionLinks = {
+  tree: string
+  rootFolder: string
+  noteByPath: string
+  search: string
+}
+
+export type SharedSpaceRedemptionContract = {
+  contractVersion: 2
+  endpoint: string
+  method: 'POST'
+  bodyField: 'inviteUrl'
+  idempotencyHeader: 'Idempotency-Key'
+  idempotencyRequired: true
+  expiresAt: string
+  nextAction: 'redeem_and_save_profile'
 }

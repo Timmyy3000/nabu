@@ -14,7 +14,6 @@ export const Route = createFileRoute('/api/shared-spaces/$sharedSpaceId/invites'
           const invite = await getSharedSpaceService(request).createSharedSpaceInvite({
             ownerPrincipalId: auth.principal!.principalId,
             sharedSpaceId: params.sharedSpaceId,
-            baseUrl: new URL(request.url).origin,
           })
           return Response.json(invite, { status: 201 })
         } catch (error) {

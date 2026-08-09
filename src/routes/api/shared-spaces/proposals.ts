@@ -25,6 +25,8 @@ export const Route = createFileRoute('/api/shared-spaces/proposals')({
             ownerPrincipalId: auth.principal!.principalId,
             path: typeof body.path === 'string' ? body.path : null,
             durationDays: typeof body.durationDays === 'number' ? body.durationDays : null,
+            permissions: Array.isArray(body.permissions) ? body.permissions as never[] : null,
+            contractVersion: typeof body.contractVersion === 'number' ? body.contractVersion : null,
           })
           return Response.json(proposal, { status: 201 })
         } catch (error) {
