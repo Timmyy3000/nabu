@@ -22,6 +22,7 @@ import { Route as ApiSharedSpacesProposalsRouteImport } from './routes/api/share
 import { Route as ApiVaultIndexRouteImport } from './routes/api/vault/index'
 import { Route as ApiVaultAssetsRouteImport } from './routes/api/vault/assets'
 import { Route as ApiVaultFoldersRouteImport } from './routes/api/vault/folders'
+import { Route as ApiVaultPageRouteImport } from './routes/api/vault/page'
 import { Route as ApiVaultSearchRouteImport } from './routes/api/vault/search'
 import { Route as ApiVaultTreeRouteImport } from './routes/api/vault/tree'
 import { Route as ApiSharedSpacesSharedSpaceIdExtendRouteImport } from './routes/api/shared-spaces/$sharedSpaceId/extend'
@@ -100,6 +101,11 @@ const ApiVaultAssetsRoute = ApiVaultAssetsRouteImport.update({
 const ApiVaultFoldersRoute = ApiVaultFoldersRouteImport.update({
   id: '/api/vault/folders',
   path: '/api/vault/folders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVaultPageRoute = ApiVaultPageRouteImport.update({
+  id: '/api/vault/page',
+  path: '/api/vault/page',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiVaultSearchRoute = ApiVaultSearchRouteImport.update({
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/api/shared-spaces/proposals': typeof ApiSharedSpacesProposalsRoute
   '/api/vault/assets': typeof ApiVaultAssetsRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/page': typeof ApiVaultPageRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/shared-spaces/': typeof ApiSharedSpacesIndexRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/api/shared-spaces/proposals': typeof ApiSharedSpacesProposalsRoute
   '/api/vault/assets': typeof ApiVaultAssetsRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/page': typeof ApiVaultPageRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/shared-spaces': typeof ApiSharedSpacesIndexRoute
@@ -236,6 +244,7 @@ export interface FileRoutesById {
   '/api/shared-spaces/proposals': typeof ApiSharedSpacesProposalsRoute
   '/api/vault/assets': typeof ApiVaultAssetsRoute
   '/api/vault/folders': typeof ApiVaultFoldersRoute
+  '/api/vault/page': typeof ApiVaultPageRoute
   '/api/vault/search': typeof ApiVaultSearchRoute
   '/api/vault/tree': typeof ApiVaultTreeRoute
   '/api/shared-spaces/': typeof ApiSharedSpacesIndexRoute
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
     | '/api/shared-spaces/proposals'
     | '/api/vault/assets'
     | '/api/vault/folders'
+    | '/api/vault/page'
     | '/api/vault/search'
     | '/api/vault/tree'
     | '/api/shared-spaces/'
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/api/shared-spaces/proposals'
     | '/api/vault/assets'
     | '/api/vault/folders'
+    | '/api/vault/page'
     | '/api/vault/search'
     | '/api/vault/tree'
     | '/api/shared-spaces'
@@ -319,6 +330,7 @@ export interface FileRouteTypes {
     | '/api/shared-spaces/proposals'
     | '/api/vault/assets'
     | '/api/vault/folders'
+    | '/api/vault/page'
     | '/api/vault/search'
     | '/api/vault/tree'
     | '/api/shared-spaces/'
@@ -347,6 +359,7 @@ export interface RootRouteChildren {
   ApiSharedSpacesProposalsRoute: typeof ApiSharedSpacesProposalsRoute
   ApiVaultAssetsRoute: typeof ApiVaultAssetsRoute
   ApiVaultFoldersRoute: typeof ApiVaultFoldersRoute
+  ApiVaultPageRoute: typeof ApiVaultPageRoute
   ApiVaultSearchRoute: typeof ApiVaultSearchRoute
   ApiVaultTreeRoute: typeof ApiVaultTreeRoute
   ApiSharedSpacesIndexRoute: typeof ApiSharedSpacesIndexRoute
@@ -450,6 +463,13 @@ declare module '@tanstack/react-router' {
       path: '/api/vault/folders'
       fullPath: '/api/vault/folders'
       preLoaderRoute: typeof ApiVaultFoldersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vault/page': {
+      id: '/api/vault/page'
+      path: '/api/vault/page'
+      fullPath: '/api/vault/page'
+      preLoaderRoute: typeof ApiVaultPageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/vault/search': {
@@ -576,6 +596,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSharedSpacesProposalsRoute: ApiSharedSpacesProposalsRoute,
   ApiVaultAssetsRoute: ApiVaultAssetsRoute,
   ApiVaultFoldersRoute: ApiVaultFoldersRoute,
+  ApiVaultPageRoute: ApiVaultPageRoute,
   ApiVaultSearchRoute: ApiVaultSearchRoute,
   ApiVaultTreeRoute: ApiVaultTreeRoute,
   ApiSharedSpacesIndexRoute: ApiSharedSpacesIndexRoute,

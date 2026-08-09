@@ -222,6 +222,64 @@ describe('buildVaultIndex', () => {
     ])
   })
 
+  it('resolves source-folder-relative wiki paths after exact vault-root matches', () => {
+    const notes = [
+      note('projects/allies/index.md', '[[docs/guide]]\n[[docs/northstar]]'),
+      note('docs/guide.md', '# Root Guide'),
+      note('projects/allies/docs/guide.md', '# Relative Guide'),
+      note('projects/allies/docs/northstar.md', '# Northstar'),
+    ]
+
+    const index = buildVaultIndex(notes)
+    const source = index.byRelPath.get('projects/allies/index.md')
+
+    expect(source?.outgoingLinks).toMatchObject([
+      {
+        target: 'docs/guide',
+        resolved: true,
+        targetRelPath: 'docs/guide.md',
+      },
+      {
+        target: 'docs/northstar',
+        resolved: true,
+        targetRelPath: 'projects/allies/docs/northstar.md',
+      },
+    ])
+  })
+
+  it('keeps traversal, missing, and ambiguous wiki targets unresolved', () => {
+    const notes = [
+      note('projects/allies/index.md', '[[../../../private]]\n[[docs/missing]]\n[[Shared Note]]'),
+      note('private.md', '# Private'),
+      note('projects/one.md', '---\ntitle: Shared Note\n---\n# One'),
+      note('projects/two.md', '---\ntitle: Shared Note\n---\n# Two'),
+    ]
+
+    const index = buildVaultIndex(notes)
+    const source = index.byRelPath.get('projects/allies/index.md')
+
+    expect(source?.outgoingLinks).toMatchObject([
+      {
+        target: '../../../private',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        target: 'docs/missing',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+      {
+        target: 'Shared Note',
+        resolved: false,
+        targetRelPath: null,
+        targetSlug: null,
+      },
+    ])
+  })
+
   it('builds reusable normalized search documents with the vault index', () => {
     const index = buildVaultIndex([
       note('ideas/agent-memory.md', '---\ntitle: Agent Memory\ntags: [AI]\n---\nShared body'),

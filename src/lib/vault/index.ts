@@ -136,7 +136,25 @@ function resolveRelativeMarkdownTarget(input: {
   return null
 }
 
+function escapesVaultRoot(input: { sourceRelPath: string; target: string }): boolean {
+  const targetWithoutExtras = stripQueryAndFragment(input.target).trim().replace(/\\/g, '/')
+  if (!targetWithoutExtras) {
+    return false
+  }
+
+  if (targetWithoutExtras.startsWith('/')) {
+    const rootTarget = targetWithoutExtras.slice(1)
+    return targetWithoutExtras.startsWith('//') || rootTarget === '..' || rootTarget.startsWith('../')
+  }
+
+  const sourceFolder = path.posix.dirname(input.sourceRelPath)
+  const resolved = path.posix.normalize(path.posix.join(sourceFolder, targetWithoutExtras))
+
+  return resolved === '..' || resolved.startsWith('../') || resolved.startsWith('/')
+}
+
 function resolveWikiTarget(input: {
+  sourceRelPath: string
   target: string
   byRelPath: Map<string, ParsedVaultNote>
   bySlug: Map<string, ParsedVaultNote>
@@ -149,13 +167,22 @@ function resolveWikiTarget(input: {
   }
 
   const targetWithoutExtras = stripQueryAndFragment(target).trim()
-  const isPathLike = targetWithoutExtras.includes('/') || targetWithoutExtras.toLowerCase().endsWith('.md')
+  const pathMatch = resolvePathLikeTarget({ target, byRelPath: input.byRelPath })
+  if (pathMatch) {
+    return pathMatch
+  }
 
-  if (isPathLike) {
-    const pathMatch = resolvePathLikeTarget({ target, byRelPath: input.byRelPath })
-    if (pathMatch) {
-      return pathMatch
-    }
+  if (escapesVaultRoot({ sourceRelPath: input.sourceRelPath, target })) {
+    return null
+  }
+
+  const relativeMatch = resolveRelativeMarkdownTarget({
+    sourceRelPath: input.sourceRelPath,
+    target,
+    byRelPath: input.byRelPath,
+  })
+  if (relativeMatch) {
+    return relativeMatch
   }
 
   const normalizedSlug = normalizeWikiSlugTarget(targetWithoutExtras)
@@ -190,6 +217,7 @@ function resolveOutgoingLink(input: {
   const targetNote =
     input.link.kind === 'wiki'
       ? resolveWikiTarget({
+          sourceRelPath: input.sourceRelPath,
           target: input.link.target,
           byRelPath: input.byRelPath,
           bySlug: input.bySlug,

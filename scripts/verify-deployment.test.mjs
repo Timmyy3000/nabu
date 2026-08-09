@@ -73,6 +73,74 @@ describe('verifyDeployment', () => {
     await expect(verifyDeployment(baseUrl, fetchImpl)).rejects.toThrow(/JavaScript/i)
   })
 
+  it('accepts a non-empty inline module bootstrap and validates local module preloads', async () => {
+    const inlineModule = response(
+      '<link rel="stylesheet" href="/assets/styles-good.css"><link rel="modulepreload" href="/assets/chunk-good.js"><script type="module">import \'/assets/chunk-good.js\'</script>',
+      { headers: { 'content-type': 'text/html' } },
+    )
+    const fetchImpl = deploymentFetch({
+      [`${baseUrl}/login?redirect=&error=`]: inlineModule,
+      [`${baseUrl}/assets/chunk-good.js`]: response('export {}', {
+        headers: { 'content-type': 'text/javascript' },
+      }),
+    })
+
+    await expect(verifyDeployment(baseUrl, fetchImpl)).resolves.toMatchObject({
+      assets: ['/assets/styles-good.css', '/assets/chunk-good.js'],
+    })
+  })
+
+  it('rejects an inline bootstrap backed only by external scripts and module preloads', async () => {
+    const externalAssets = response(
+      '<link rel="stylesheet" href="/assets/styles-good.css"><link rel="modulepreload" href="https://cdn.example/chunk.js"><script type="module">import \'https://cdn.example/app.js\'</script>',
+      { headers: { 'content-type': 'text/html' } },
+    )
+    const fetchImpl = deploymentFetch({
+      [`${baseUrl}/login?redirect=&error=`]: externalAssets,
+    })
+
+    await expect(verifyDeployment(baseUrl, fetchImpl)).rejects.toThrow(/local JavaScript/i)
+  })
+
+  it('validates the content type of local module preloads', async () => {
+    const invalidPreload = response(
+      '<link rel="stylesheet" href="/assets/styles-good.css"><link rel="modulepreload" href="/assets/chunk-good.js"><script type="module">import \'/assets/chunk-good.js\'</script>',
+      { headers: { 'content-type': 'text/html' } },
+    )
+    const fetchImpl = deploymentFetch({
+      [`${baseUrl}/login?redirect=&error=`]: invalidPreload,
+      [`${baseUrl}/assets/chunk-good.js`]: response('.not-javascript{}', {
+        headers: { 'content-type': 'text/css' },
+      }),
+    })
+
+    await expect(verifyDeployment(baseUrl, fetchImpl)).rejects.toThrow(/JavaScript/i)
+  })
+
+  it('rejects a whitespace-only inline module as the only bootstrap', async () => {
+    const whitespaceModule = response(
+      '<link rel="stylesheet" href="/assets/styles-good.css"><script type="module">\n  \t </script>',
+      { headers: { 'content-type': 'text/html' } },
+    )
+    const fetchImpl = deploymentFetch({
+      [`${baseUrl}/login?redirect=&error=`]: whitespaceModule,
+    })
+
+    await expect(verifyDeployment(baseUrl, fetchImpl)).rejects.toThrow(/JavaScript/i)
+  })
+
+  it('rejects a classic inline script as the only bootstrap', async () => {
+    const classicInline = response(
+      '<link rel="stylesheet" href="/assets/styles-good.css"><script>console.log(\'bootstrap\')</script>',
+      { headers: { 'content-type': 'text/html' } },
+    )
+    const fetchImpl = deploymentFetch({
+      [`${baseUrl}/login?redirect=&error=`]: classicInline,
+    })
+
+    await expect(verifyDeployment(baseUrl, fetchImpl)).rejects.toThrow(/JavaScript/i)
+  })
+
   it('checks required selectors across the combined local stylesheets', async () => {
     const splitStyles = response(
       '<link rel="stylesheet" href="/assets/vendor.css"><link rel="stylesheet" href="/assets/styles-good.css"><script src="/assets/app-good.js"></script>',

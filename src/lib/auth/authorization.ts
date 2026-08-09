@@ -114,6 +114,22 @@ export async function resolveVaultPrincipal(
     }
   }
 
+  return resolvePublicReadLinkPrincipalFromStore(readLinkSecret, nowMs, store)
+}
+
+export async function resolvePublicReadLinkPrincipal(
+  readLinkSecret: string | null | undefined,
+  nowMs: number = Date.now(),
+): Promise<VaultPrincipal | null> {
+  const store = await getSharedSpaceStore()
+  return resolvePublicReadLinkPrincipalFromStore(readLinkSecret, nowMs, store)
+}
+
+function resolvePublicReadLinkPrincipalFromStore(
+  readLinkSecret: string | null | undefined,
+  nowMs: number,
+  store: Awaited<ReturnType<typeof getSharedSpaceStore>>,
+): VaultPrincipal | null {
   if (!readLinkSecret) {
     return null
   }

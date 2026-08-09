@@ -642,7 +642,6 @@ export function HomePage({
       <li key={node.path || 'root'}>
         <Link
           to="/"
-          reloadDocument
           search={() => withShareToken({ ...buildTagSearchState(node.path, '', ''), q: '', searchPath: '', searchTag: '' }, shareToken)}
           className={node.path === browse.folder.path ? 'tree-row is-active' : 'tree-row'}
           style={{ paddingLeft: `${6 + depth * 14}px` }}
