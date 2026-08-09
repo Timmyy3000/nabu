@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { __resetSharedSpaceStoreForTests, getSharedSpaceStore } from './store'
 import { hashSecret } from './crypto'
+
+const require = createRequire(import.meta.url)
+const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite')
 
 const originalDataPath = process.env.NABU_DATA_PATH
 const originalNodeEnv = process.env.NODE_ENV
@@ -55,6 +59,42 @@ describe('shared-space store configuration and persistence', () => {
       id: 'proposal-1',
       rootPath: 'projects/allies',
     })
+  })
+
+  it('adds v2 proposal and invite replay columns when opening a legacy database', async () => {
+    process.env.NODE_ENV = 'test'
+    const dataPath = await createDataPath()
+    process.env.NABU_DATA_PATH = dataPath
+    const db = new DatabaseSync(path.join(dataPath, 'shared-spaces.sqlite'))
+    db.exec(`
+      CREATE TABLE shared_space_proposals (
+        id TEXT PRIMARY KEY,
+        owner_principal_id TEXT NOT NULL,
+        root_path TEXT NOT NULL,
+        preview_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        consumed_at INTEGER
+      );
+      CREATE TABLE shared_space_invites (
+        id TEXT PRIMARY KEY,
+        shared_space_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        redeemed_at INTEGER,
+        redeemed_by_principal_id TEXT
+      );
+    `)
+    db.close()
+
+    await getSharedSpaceStore()
+    const migrated = new DatabaseSync(path.join(dataPath, 'shared-spaces.sqlite'))
+    const proposalColumns = (migrated.prepare('PRAGMA table_info(shared_space_proposals)').all() as Array<{ name: string }>).map((row) => row.name)
+    const inviteColumns = (migrated.prepare('PRAGMA table_info(shared_space_invites)').all() as Array<{ name: string }>).map((row) => row.name)
+    migrated.close()
+    expect(proposalColumns).toEqual(expect.arrayContaining(['contract_version', 'requested_duration_days', 'requested_permissions_json']))
+    expect(inviteColumns).toEqual(expect.arrayContaining(['idempotency_key_hash', 'access_token_hash', 'access_token_id']))
   })
 
   it('rejects a relative data path in production', async () => {

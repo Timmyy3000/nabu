@@ -13,12 +13,15 @@ import { Route as ReadLinkRoute } from './shared-spaces/$sharedSpaceId/read-link
 const originalKnowledgePath = process.env.KNOWLEDGE_PATH
 const originalDataPath = process.env.NABU_DATA_PATH
 const originalPassword = process.env.NABU_PASSWORD
+const originalPublicUrl = process.env.NABU_PUBLIC_URL
 const roots: string[] = []
 
 afterEach(async () => {
   process.env.KNOWLEDGE_PATH = originalKnowledgePath
   process.env.NABU_DATA_PATH = originalDataPath
   process.env.NABU_PASSWORD = originalPassword
+  if (originalPublicUrl === undefined) delete process.env.NABU_PUBLIC_URL
+  else process.env.NABU_PUBLIC_URL = originalPublicUrl
   __resetSharedSpaceServiceForTests()
   await Promise.allSettled(roots.map((root) => rm(root, { recursive: true, force: true })))
   roots.length = 0
@@ -180,5 +183,30 @@ describe('shared-space HTTP API', () => {
       params: { sharedSpaceId: space.sharedSpaceId },
     })
     expect(repeated.status).toBe(204)
+  })
+
+  it('uses the configured canonical public URL instead of a hostile request origin', async () => {
+    await fixture()
+    process.env.NABU_PUBLIC_URL = 'https://trusted.example/base'
+    const proposalHandler = ProposalsRoute.options.server!.handlers!.POST
+    const proposalResponse = await proposalHandler({
+      request: new Request('https://evil.example/api/shared-spaces/proposals', {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ path: 'little-helpers', contractVersion: 2, durationDays: 7, permissions: ['read'] }),
+      }),
+    })
+    const proposal = await proposalResponse.json()
+    const confirmed = await SpacesRoute.options.server!.handlers!.POST({
+      request: new Request('https://evil.example/api/shared-spaces', {
+        method: 'POST',
+        headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ proposalId: proposal.proposalId, confirmed: true, contractVersion: 2, durationDays: 7, permissions: ['read'] }),
+      }),
+    })
+    const invite = await confirmed.json()
+    expect(confirmed.status).toBe(201)
+    expect(invite.inviteUrl).toMatch(/^https:\/\/trusted\.example\/base\/invites\//)
+    expect(invite.inviteUrl).not.toContain('evil.example')
   })
 })

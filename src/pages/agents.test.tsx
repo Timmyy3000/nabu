@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SHARED_SPACE_AGENT_CONTRACT } from '../lib/shared-spaces/agent-contract'
 import { renderAgentsMarkdown } from './agents'
 
 describe('renderAgentsMarkdown', () => {
@@ -27,6 +28,39 @@ describe('renderAgentsMarkdown', () => {
     expect(markdown).toContain('410 SHARED_SPACE_INVITE_INVALID')
     expect(markdown).toContain('If the deployment runs multiple instances')
     expect(markdown).not.toContain('<html')
+  })
+
+  it('documents the version-2 redemption and portable profile contract', () => {
+    const markdown = renderAgentsMarkdown('https://nabu.example.test/base')
+
+    expect(markdown).toContain('`contractVersion: 2`')
+    expect(markdown).toContain('Idempotency-Key')
+    expect(markdown).toContain('exact same invite and key')
+    expect(markdown).toContain('make at most one recovery request')
+    expect(markdown).toContain('version-1 `410`')
+    expect(markdown).toContain('deployment-base-relative suffix')
+    expect(markdown).toContain('do not resolve it as an origin-root URL')
+    expect(markdown).toContain('tree')
+    for (const line of SHARED_SPACE_AGENT_CONTRACT.profile.example) {
+      expect(markdown).toContain(line)
+    }
+    for (const key of SHARED_SPACE_AGENT_CONTRACT.profile.keys) {
+      expect(markdown).toContain(key)
+    }
+    expect(markdown).toContain('NABU_CREDENTIALS_DIR')
+    expect(markdown).toContain(SHARED_SPACE_AGENT_CONTRACT.profile.deploymentIdAlgorithm)
+    expect(markdown).toContain('Discard profiles without the permission required by the operation')
+    expect(markdown).toContain('not persisted as an eighth key')
+    expect(markdown).toContain(SHARED_SPACE_AGENT_CONTRACT.profile.codexPath)
+    expect(markdown).toContain(SHARED_SPACE_AGENT_CONTRACT.profile.hermesPath)
+    expect(markdown).toContain('legacy Hermes single-file')
+    expect(markdown).toContain('segment-aware')
+    expect(markdown).toContain('equal-depth')
+    expect(markdown).toContain('verify the selected bearer token')
+    expect(markdown).toContain('v1 fallback')
+    expect(markdown).toContain('atomic')
+    expect(markdown).not.toContain('Authorization: Bearer ey')
+    expect(markdown).not.toContain('accessToken=')
   })
 
 })

@@ -1,5 +1,6 @@
 import { requireVaultPrincipal, type VaultPrincipal } from '../auth/authorization'
 import { SharedSpaceError, SharedSpaceService } from './service'
+import { resolveCanonicalPublicUrl } from './public-url'
 
 export async function requireSharedSpaceOwner(request: Request): Promise<{
   principal: VaultPrincipal | null
@@ -35,11 +36,13 @@ export async function readJsonBody(request: Request): Promise<Record<string, unk
 
 export function sharedSpaceErrorResponse(error: unknown): Response {
   if (error instanceof SharedSpaceError) {
+    const body = {
+      error: error.message,
+      code: error.code,
+      ...(error.nextAction ? { nextAction: error.nextAction } : {}),
+    }
     return Response.json(
-      {
-        error: error.message,
-        code: error.code,
-      },
+      body,
       { status: error.status },
     )
   }
@@ -48,5 +51,5 @@ export function sharedSpaceErrorResponse(error: unknown): Response {
 }
 
 export function getSharedSpaceService(request: Request): SharedSpaceService {
-  return new SharedSpaceService({ baseUrl: new URL(request.url).origin })
+  return new SharedSpaceService({ baseUrl: resolveCanonicalPublicUrl({ requestUrl: request.url }) })
 }

@@ -32,7 +32,6 @@ export const Route = createFileRoute('/api/shared-spaces/$sharedSpaceId/read-lin
             ownerPrincipalId: auth.principal!.principalId,
             sharedSpaceId: params.sharedSpaceId,
             durationDays,
-            baseUrl: new URL(request.url).origin,
           })
           return Response.json(link, { status: 201 })
         } catch (error) {

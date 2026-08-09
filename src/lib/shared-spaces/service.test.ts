@@ -7,6 +7,7 @@ import {
   INVITE_TTL_MS,
   MAX_SHARED_SPACE_DURATION_DAYS,
   MIN_SHARED_SPACE_DURATION_DAYS,
+  PROPOSAL_TTL_MS,
   SharedSpaceService,
   __resetSharedSpaceServiceForTests,
 } from './service'
@@ -135,6 +136,186 @@ describe('shared-space service', () => {
     await expect(
       service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true }),
     ).rejects.toMatchObject({ code: 'SHARED_SPACE_PROPOSAL_INVALID', status: 410 })
+  })
+
+  it('binds version-2 proposal scope, duration, and permissions to confirmation', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example/base' })
+    const proposal = await service.proposeSharedSpace({
+      ownerPrincipalId: 'owner',
+      path: 'little-helpers',
+      durationDays: 14,
+      permissions: ['read'],
+      contractVersion: 2,
+    })
+
+    await expect(service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      contractVersion: 2,
+      durationDays: 7,
+      permissions: ['read'],
+    })).rejects.toMatchObject({ code: 'SHARED_SPACE_PROPOSAL_CONSENT_MISMATCH', status: 400 })
+
+    const confirmed = await service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      contractVersion: 2,
+      durationDays: 14,
+      permissions: ['read'],
+      path: 'little-helpers',
+    })
+    expect(confirmed.contractVersion).toBe(2)
+    expect(confirmed.permissions).toEqual(['read'])
+    expect(confirmed.redemption).toMatchObject({
+      contractVersion: 2,
+      endpoint: '/api/shared-spaces/invites/redeem',
+      method: 'POST',
+      bodyField: 'inviteUrl',
+      idempotencyHeader: 'Idempotency-Key',
+      idempotencyRequired: true,
+      expiresAt: confirmed.inviteExpiresAt,
+      nextAction: 'redeem_and_save_profile',
+    })
+    expect(confirmed.inviteUrl).toMatch(/^https:\/\/nabu\.example\/base\/invites\//)
+  })
+
+  it('replays the same idempotent redemption and rejects a different key', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example/base' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+    const key = 'client-key-12345678901234567890'
+
+    const first = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: key })
+    const replay = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: key })
+    expect(replay).toEqual(first)
+    const inviteSecret = new URL(confirmed.inviteUrl).pathname.split('/').at(-1)!
+    const context = (await getSharedSpaceStore()).getInviteContext(hashSecret(inviteSecret))
+    expect(context?.invite.idempotencyKeyHash).toBe(hashSecret(key))
+    expect(context?.invite.accessTokenHash).toBe(hashSecret(first.accessToken))
+    expect(context?.invite.accessTokenHash).not.toContain(first.accessToken)
+    expect(first).toMatchObject({
+      contractVersion: 2,
+      profileId: expect.stringMatching(/^nabu-profile-/),
+      nextAction: 'save_credential_profile',
+      links: {
+        tree: expect.stringContaining('api/vault/tree'),
+        rootFolder: expect.stringContaining('api/vault/folders?path={rootPath}'),
+        noteByPath: expect.stringContaining('api/vault/notes/by-path?path={path}'),
+        search: expect.stringContaining('api/vault/search?path={rootPath}&q={query}'),
+      },
+    })
+    expect(first.links.tree).not.toContain('?path=')
+    expect(first.links.tree).not.toContain('{rootPath}')
+    expect(Object.values(first.links).join(' ')).not.toContain(first.accessToken)
+    expect(Object.values(first.links)).toEqual([
+      '/api/vault/tree',
+      '/api/vault/folders?path={rootPath}',
+      '/api/vault/notes/by-path?path={path}',
+      '/api/vault/search?path={rootPath}&q={query}',
+    ])
+    expect(Object.values(first.links).join(' ')).not.toContain('/base/base/')
+
+    await expect(service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: 'another-key-12345678901234567890' }))
+      .rejects.toMatchObject({ code: 'SHARED_SPACE_INVITE_INVALID', status: 410 })
+  })
+
+  it('replays an already-redeemed invite with the same key after the invite TTL', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    let now = 1_000
+    const service = new SharedSpaceService({ now: () => now, baseUrl: 'https://nabu.example' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+    const key = 'recovery-key-12345678901234567890'
+    const first = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: key })
+
+    now += INVITE_TTL_MS + 1
+    const recovered = await service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: key })
+
+    expect(recovered.accessToken).toBe(first.accessToken)
+    expect(recovered.sharedSpaceId).toBe(first.sharedSpaceId)
+    await expect(service.redeemSharedSpaceInvite({
+      inviteUrl: confirmed.inviteUrl,
+      idempotencyKey: 'different-key-123456789012345678',
+    })).rejects.toMatchObject({ code: 'SHARED_SPACE_INVITE_INVALID', status: 410 })
+  })
+
+  it('describes redemption for replacement invites on an existing shared space', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example/base' })
+    const proposal = await service.proposeSharedSpace({ ownerPrincipalId: 'owner', path: 'little-helpers' })
+    const confirmed = await service.confirmSharedSpace({ ownerPrincipalId: 'owner', proposalId: proposal.proposalId, confirmed: true })
+
+    const replacement = await service.createSharedSpaceInvite({ ownerPrincipalId: 'owner', sharedSpaceId: confirmed.sharedSpaceId })
+
+    expect(replacement).toMatchObject({
+      sharedSpaceId: confirmed.sharedSpaceId,
+      rootPath: 'little-helpers',
+      permissions: confirmed.permissions,
+      sharedSpaceExpiresAt: confirmed.sharedSpaceExpiresAt,
+      contractVersion: 2,
+      redemption: {
+        endpoint: '/api/shared-spaces/invites/redeem',
+        idempotencyHeader: 'Idempotency-Key',
+        idempotencyRequired: true,
+      },
+    })
+  })
+
+  it('canonicalizes equivalent version-2 permission order during consent', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    const service = new SharedSpaceService({ now: () => 1_000, baseUrl: 'https://nabu.example' })
+    const proposal = await service.proposeSharedSpace({
+      ownerPrincipalId: 'owner',
+      path: 'little-helpers',
+      durationDays: 14,
+      permissions: ['write', 'read'],
+      contractVersion: 2,
+    })
+
+    const confirmed = await service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      contractVersion: 2,
+      durationDays: 14,
+      permissions: ['read', 'write'],
+    })
+    expect(confirmed.permissions).toEqual(['read', 'write'])
+  })
+
+  it('returns owner-only recovery metadata for an expired version-2 proposal', async () => {
+    await createFixture({ 'little-helpers/readme.md': '# Helpers' })
+    let now = 1_000
+    const service = new SharedSpaceService({ now: () => now })
+    const proposal = await service.proposeSharedSpace({
+      ownerPrincipalId: 'owner',
+      path: 'little-helpers',
+      durationDays: 7,
+      permissions: ['read', 'write'],
+      contractVersion: 2,
+    })
+    now += PROPOSAL_TTL_MS + 1
+
+    await expect(service.confirmSharedSpace({
+      ownerPrincipalId: 'owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      contractVersion: 2,
+    })).rejects.toMatchObject({
+      code: 'SHARED_SPACE_PROPOSAL_EXPIRED',
+      status: 410,
+      nextAction: 'create_new_proposal',
+    })
+    await expect(service.confirmSharedSpace({
+      ownerPrincipalId: 'other-owner',
+      proposalId: proposal.proposalId,
+      confirmed: true,
+      contractVersion: 2,
+    })).rejects.toMatchObject({ code: 'SHARED_SPACE_PROPOSAL_INVALID', status: 410 })
   })
 
   it('redeems a one-time invite atomically and stores only hashes', async () => {

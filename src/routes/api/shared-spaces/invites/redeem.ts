@@ -13,6 +13,7 @@ export const Route = createFileRoute('/api/shared-spaces/invites/redeem')({
         try {
           const result = await getSharedSpaceService(request).redeemSharedSpaceInvite({
             inviteUrl: typeof body.inviteUrl === 'string' ? body.inviteUrl : '',
+            idempotencyKey: request.headers.get('Idempotency-Key'),
           })
           return Response.json(result)
         } catch (error) {
