@@ -152,6 +152,42 @@ describe('Nabu MCP server', () => {
     expect(content && 'text' in content ? content.text : '').toContain('ideas/agent.md')
   })
 
+  it('keeps bootstrap and shared surfaces explicitly isolated', async () => {
+    const bootstrapPair = await connectTestPair(createNabuMcpServer(createFakeGateway(), 'bootstrap'), AUTO_NEGOTIATION)
+    expect((await bootstrapPair.client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      'redeem_shared_space_invite',
+    ])
+    await expect(bootstrapPair.client.listResources()).resolves.toEqual({ resources: [] })
+    await bootstrapPair.client.close()
+    await bootstrapPair.server.close()
+
+    const readPair = await connectTestPair(createNabuMcpServer(createFakeGateway(), 'shared-read'), AUTO_NEGOTIATION)
+    expect((await readPair.client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      'get_vault_summary',
+      'search_notes',
+      'read_note',
+      'list_folder',
+      'get_neighborhood',
+    ])
+    await readPair.client.close()
+    await readPair.server.close()
+
+    const writePair = await connectTestPair(createNabuMcpServer(createFakeGateway(), 'shared-read-write'), AUTO_NEGOTIATION)
+    expect((await writePair.client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      'get_vault_summary',
+      'search_notes',
+      'read_note',
+      'list_folder',
+      'get_neighborhood',
+      'create_note',
+      'update_note',
+      'move_note',
+      'delete_note',
+    ])
+    await writePair.client.close()
+    await writePair.server.close()
+  })
+
   it('returns bounded tool errors for oversized results', async () => {
     const gateway = createFakeGateway()
     gateway.getVaultSummary = async () => ({ value: 'x'.repeat(2_000_001) })

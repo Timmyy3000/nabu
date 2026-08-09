@@ -922,6 +922,19 @@ export async function rebuildVaultIndex(): Promise<LoadedVaultIndex> {
   return loadVaultIndex(true)
 }
 
+export async function getVaultSummary(principalInput?: VaultPrincipal): Promise<{
+  builtAt: string
+  stats: VaultIndexStats
+  folders: string[]
+}> {
+  const index = await getVaultIndexForPrincipal(getPrincipal(principalInput))
+  return {
+    builtAt: index.builtAt,
+    stats: index.stats,
+    folders: index.folders,
+  }
+}
+
 export async function getNoteBySlug(slug: string, principalInput?: VaultPrincipal): Promise<VaultSlugLookup | null> {
   const normalizedSlug = normalizeSlugInput(slug)
 

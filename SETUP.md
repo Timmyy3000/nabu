@@ -13,7 +13,7 @@ Your first job is **put the knowledge on persistent storage and make the app poi
 
 ## What Nabu needs
 
-Nabu needs three runtime inputs for a production deployment:
+Nabu needs three core runtime inputs for a production deployment:
 
 - `KNOWLEDGE_PATH` — absolute path to the mounted knowledge directory
 - `NABU_DATA_PATH` — absolute path to persistent application metadata
@@ -25,6 +25,13 @@ Example:
 KNOWLEDGE_PATH=/data/nabu/knowledge
 NABU_DATA_PATH=/data/nabu/app-data
 NABU_PASSWORD="set-a-real-password-here"
+```
+
+For a public native MCP endpoint, also set `NABU_PUBLIC_URL` to the canonical
+HTTPS base URL (including any deployment path prefix):
+
+```bash
+NABU_PUBLIC_URL=https://nabu.example.com
 ```
 
 Keep `NABU_DATA_PATH` on persistent storage. It contains lease metadata and
@@ -87,10 +94,33 @@ agent token is needed. Use HTTPS for non-loopback URLs.
 ```
 
 The MCP process exposes traversal, search, note resources, and note
-create/update/move/delete operations through stdio. A native remote `/mcp`
-endpoint with OAuth, Origin validation, and deployment-specific proxy guidance
-is intentionally a separate follow-up. Remote MCP clients using the removed
-separate agent-token configuration must be reconfigured with `NABU_PASSWORD`.
+create/update/move/delete operations through stdio. Nabu also exposes the same
+surface at `POST /mcp` over stateless Streamable HTTP. Send the password-derived
+owner bearer on every request:
+
+```http
+Authorization: Bearer <credential-derived-from-NABU_PASSWORD>
+```
+
+The native endpoint deliberately keeps the agent flow small:
+
+- no `Authorization` header opens a bootstrap surface with only
+  `redeem_shared_space_invite` and no resources;
+- redeem the one-time invite URL, save the returned scoped access token in the
+  agent's secure credential profile, and reuse it across agents, sessions, and
+  chats;
+- a scoped token can read or write only its shared root until the lease expires
+  or the owner revokes it; shared-space management remains owner-only;
+- MCP redemption accepts an optional `Idempotency-Key`. If omitted, Nabu derives
+  a stable non-secret key, so agents do not need additional setup.
+
+Configure `NABU_PUBLIC_URL` to the canonical HTTPS base URL in production. The
+reverse proxy must preserve the trusted `Host` header and browser `Origin`; use
+HTTPS for every non-loopback deployment. The v1 native endpoint uses a fixed
+bearer header rather than OAuth. REST and stdio remain supported.
+
+Remote MCP clients using the removed separate agent-token configuration must be
+reconfigured with `NABU_PASSWORD`.
 
 ## The non-negotiables
 

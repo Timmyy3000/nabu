@@ -12,5 +12,10 @@ describe('GET /api/agent/bootstrap', () => {
 
     expect(response.status).toBe(200)
     expect(payload).toEqual(getAgentBootstrapContract())
+    expect(payload.mcp).toMatchObject({
+      nativeRemoteEndpoint: '/mcp',
+      nativeRemoteTransport: 'streamable-http-stateless',
+      nativeRemoteAuth: 'Authorization: Bearer',
+    })
   })
 })
