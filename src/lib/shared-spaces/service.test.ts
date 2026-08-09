@@ -171,7 +171,7 @@ describe('shared-space service', () => {
     expect(confirmed.permissions).toEqual(['read'])
     expect(confirmed.redemption).toMatchObject({
       contractVersion: 2,
-      endpoint: '/base/api/shared-spaces/invites/redeem',
+      endpoint: '/api/shared-spaces/invites/redeem',
       method: 'POST',
       bodyField: 'inviteUrl',
       idempotencyHeader: 'Idempotency-Key',
@@ -211,6 +211,13 @@ describe('shared-space service', () => {
     expect(first.links.tree).not.toContain('?path=')
     expect(first.links.tree).not.toContain('{rootPath}')
     expect(Object.values(first.links).join(' ')).not.toContain(first.accessToken)
+    expect(Object.values(first.links)).toEqual([
+      '/api/vault/tree',
+      '/api/vault/folders?path={rootPath}',
+      '/api/vault/notes/by-path?path={path}',
+      '/api/vault/search?path={rootPath}&q={query}',
+    ])
+    expect(Object.values(first.links).join(' ')).not.toContain('/base/base/')
 
     await expect(service.redeemSharedSpaceInvite({ inviteUrl: confirmed.inviteUrl, idempotencyKey: 'another-key-12345678901234567890' }))
       .rejects.toMatchObject({ code: 'SHARED_SPACE_INVITE_INVALID', status: 410 })

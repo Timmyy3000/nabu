@@ -3,17 +3,22 @@ import { AUTH_COOKIE_NAME, createSessionToken } from '../lib/auth/session'
 import { Route } from './agents[.]md'
 
 const ORIGINAL_NABU_PASSWORD = process.env.NABU_PASSWORD
+const ORIGINAL_PUBLIC_URL = process.env.NABU_PUBLIC_URL
 
 beforeEach(() => {
   process.env.NABU_PASSWORD = 'test-password'
 })
 
 afterEach(() => {
-  process.env.NABU_PASSWORD = ORIGINAL_NABU_PASSWORD
+  if (ORIGINAL_NABU_PASSWORD === undefined) delete process.env.NABU_PASSWORD
+  else process.env.NABU_PASSWORD = ORIGINAL_NABU_PASSWORD
+  if (ORIGINAL_PUBLIC_URL === undefined) delete process.env.NABU_PUBLIC_URL
+  else process.env.NABU_PUBLIC_URL = ORIGINAL_PUBLIC_URL
 })
 
 describe('GET /agents.md', () => {
   it('returns the complete raw markdown contract without authentication', async () => {
+    process.env.NABU_PUBLIC_URL = 'https://nabu.timi.click'
     const handler = Route.options.server.handlers.GET
     const response = await handler({
       request: new Request('https://nabu.timi.click/agents.md'),
@@ -37,6 +42,7 @@ describe('GET /agents.md', () => {
   })
 
   it('returns the same complete contract when authenticated', async () => {
+    process.env.NABU_PUBLIC_URL = 'https://nabu.timi.click'
     const handler = Route.options.server.handlers.GET
     const session = createSessionToken()
     const response = await handler({
@@ -60,5 +66,18 @@ describe('GET /agents.md', () => {
     expect(body).toContain('The JSON field is exactly `inviteUrl`')
     expect(body).toContain('Folder delete is empty-only and non-recursive.')
     expect(body).not.toContain('<html')
+  })
+
+  it('uses the configured canonical base when the request origin is hostile', async () => {
+    process.env.NABU_PUBLIC_URL = 'https://trusted.example/base'
+    const handler = Route.options.server.handlers.GET
+    const response = await handler({
+      request: new Request('https://evil.example/agents.md'),
+    })
+    const body = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(body).toContain('https://trusted.example/base/api/auth/login')
+    expect(body).not.toContain('https://evil.example/api/auth/login')
   })
 })

@@ -4,7 +4,8 @@ import { normalizeVaultPath } from '../paths'
 import { getVaultConfig } from '../vault/config'
 import { deriveIdempotentAccessToken, generateId, generateOpaqueSecret, hashSecret, isValidIdempotencyKey } from './crypto'
 import { getSharedSpaceStore, __resetSharedSpaceStoreForTests } from './store'
-import { resolveCanonicalLink, resolveCanonicalPath, resolveCanonicalPublicUrl } from './public-url'
+import { resolveCanonicalLink, resolveCanonicalPublicUrl } from './public-url'
+import { SHARED_SPACE_AGENT_CONTRACT } from './agent-contract'
 import type {
   SharedSpaceDetails,
   SharedSpacePermission,
@@ -232,23 +233,14 @@ function profileId(baseUrl: string, sharedSpaceId: string): string {
   return `nabu-profile-${hashSecret(`${baseUrl}\n${sharedSpaceId}`).slice(0, 32)}`
 }
 
-function redemptionLinks(baseUrl: string): SharedSpaceRedemptionLinks {
-  const prefix = resolveCanonicalPath(baseUrl, '')
-  const route = (value: string) => `${prefix}${prefix.endsWith('/') || value.startsWith('/') ? '' : '/'}${value}`
-  return {
-    tree: route('api/vault/tree'),
-    rootFolder: route('api/vault/folders?path={rootPath}'),
-    noteByPath: route('api/vault/notes/by-path?path={path}'),
-    search: route('api/vault/search?path={rootPath}&q={query}'),
-  }
+function redemptionLinks(): SharedSpaceRedemptionLinks {
+  return { ...SHARED_SPACE_AGENT_CONTRACT.redemption.responseLinks }
 }
 
-function redemptionContract(baseUrl: string, expiresAt: string): SharedSpaceRedemptionContract {
-  const prefix = resolveCanonicalPath(baseUrl, '')
-  const endpoint = `${prefix}${prefix.endsWith('/') ? '' : '/'}api/shared-spaces/invites/redeem`
+function redemptionContract(expiresAt: string): SharedSpaceRedemptionContract {
   return {
     contractVersion: 2,
-    endpoint,
+    endpoint: SHARED_SPACE_AGENT_CONTRACT.redemption.endpoint,
     method: 'POST',
     bodyField: 'inviteUrl',
     idempotencyHeader: 'Idempotency-Key',
@@ -423,7 +415,7 @@ export class SharedSpaceService {
       inviteExpiresAt: iso(invite.expiresAt),
       inviteUsesRemaining: 1,
       contractVersion: 2,
-      redemption: redemptionContract(resolveCanonicalPublicUrl({ configuredBaseUrl: input.baseUrl ?? this.baseUrl }), iso(invite.expiresAt)),
+      redemption: redemptionContract(iso(invite.expiresAt)),
     }
   }
 
@@ -482,7 +474,7 @@ export class SharedSpaceService {
       contractVersion: 2,
       profileId: profileId(baseUrl, inviteResult.space.id),
       nextAction: 'save_credential_profile',
-      links: redemptionLinks(baseUrl),
+      links: redemptionLinks(),
     }
   }
 
