@@ -36,6 +36,8 @@ describe('renderAgentsMarkdown', () => {
     expect(markdown).toContain('`contractVersion: 2`')
     expect(markdown).toContain('Idempotency-Key')
     expect(markdown).toContain('same invite/key pair')
+    expect(markdown).toContain('deployment-base-relative suffix')
+    expect(markdown).toContain('do not resolve it as an origin-root URL')
     expect(markdown).toContain('tree')
     for (const line of SHARED_SPACE_AGENT_CONTRACT.profile.example) {
       expect(markdown).toContain(line)
