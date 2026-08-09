@@ -354,9 +354,12 @@ function collectPublicInaccessibleLinks(note: ParsedVaultNote, principal: VaultP
   for (const match of note.body.matchAll(markdownLinkRegex)) {
     const raw = match[0] ?? ''
     const target = parseMarkdownTarget(match[1] ?? '')
-    const targetPath = candidateLinkPath(note.relPath, 'markdown', target)
+    const original = note.outgoingLinks.find((link) => link.raw === raw || link.raw === raw.slice(1))
+    const targetPath = original?.resolved && original.targetRelPath
+      ? original.targetRelPath
+      : candidateLinkPath(note.relPath, 'markdown', target)
     if (raw && targetPath && !isPathInPrincipalScope(principal, targetPath)) {
-      add(raw, {
+      add(raw, original ?? {
         raw,
         kind: 'markdown',
         text: null,
@@ -374,9 +377,11 @@ function collectPublicInaccessibleLinks(note: ParsedVaultNote, principal: VaultP
     const rawTarget = (match[1] ?? '').trim()
     const aliasSeparatorIndex = rawTarget.indexOf('|')
     const target = (aliasSeparatorIndex === -1 ? rawTarget : rawTarget.slice(0, aliasSeparatorIndex)).trim()
-    const targetPath = candidateLinkPath(note.relPath, 'wiki', target)
+    const original = note.outgoingLinks.find((link) => link.raw === raw || link.raw === raw.slice(1))
+    const targetPath = original?.resolved && original.targetRelPath
+      ? original.targetRelPath
+      : candidateLinkPath(note.relPath, 'wiki', target)
     if (raw && targetPath && !isPathInPrincipalScope(principal, targetPath)) {
-      const original = note.outgoingLinks.find((link) => link.raw === raw || link.raw === raw.slice(1))
       add(raw, original ?? {
         raw,
         kind: 'wiki',
@@ -431,6 +436,12 @@ function createPublicScopedNote(note: ParsedVaultNote, principal: VaultPrincipal
   parsed.body = body
   parsed.rawMarkdown = body
   parsed.warnings = note.warnings
+  const accessibleResolvedLinks = new Map(
+    note.outgoingLinks
+      .filter((link) => link.resolved && link.targetRelPath && isPathInPrincipalScope(principal, link.targetRelPath))
+      .map((link) => [link.raw, link]),
+  )
+  parsed.outgoingLinks = parsed.outgoingLinks.map((link) => accessibleResolvedLinks.get(link.raw) ?? link)
   parsed.outgoingLinks.push(
     ...inaccessibleLinks.map((link, index) => ({
       ...link,
