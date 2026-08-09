@@ -3,6 +3,8 @@ import type { SharedSpacePermission } from '../shared-spaces/types'
 import type { VaultStructuredNoteDocument } from '../vault/write-note'
 import { hashVaultNote } from '../vault/content-hash'
 import { deriveAgentCredential } from '../auth/agent-credential'
+import type { VaultPrincipal } from '../auth/authorization'
+import { hashSecret } from '../shared-spaces/crypto'
 
 export type NoteWriteInput = {
   path: string
@@ -46,13 +48,25 @@ export type KnowledgeGateway = {
   listSharedSpaces: () => Promise<unknown>
   getSharedSpace: (sharedSpaceId: string) => Promise<unknown>
   revokeSharedSpace: (sharedSpaceId: string) => Promise<unknown>
-  redeemSharedSpaceInvite: (inviteUrl: string) => Promise<unknown>
+  redeemSharedSpaceInvite: (inviteUrl: string, idempotencyKey?: string | null) => Promise<unknown>
   createSharedSpaceInvite: (sharedSpaceId: string) => Promise<unknown>
   extendSharedSpace: (input: { sharedSpaceId: string; durationDays: number; confirmed: boolean }) => Promise<unknown>
 }
 
 export const MCP_MAX_NOTE_BYTES = 1_000_000
 export const MCP_MAX_RESULT_BYTES = 2_000_000
+
+const OWNER_VAULT_PRINCIPAL: VaultPrincipal = {
+  kind: 'owner',
+  principalId: 'owner',
+  permissions: ['read', 'write'],
+  rootPath: null,
+  sharedSpaceId: null,
+}
+
+export function deriveMcpIdempotencyKey(inviteUrl: string): string {
+  return `nabu-mcp-${hashSecret(inviteUrl.trim())}`
+}
 
 export class McpConfigurationError extends Error {
   constructor(message: string) {
@@ -228,12 +242,13 @@ export async function prepareMcpEnvironment(env: NodeJS.ProcessEnv = process.env
   }
 }
 
-export function createDirectKnowledgeGateway(): KnowledgeGateway {
+export function createDirectKnowledgeGateway(principal: VaultPrincipal = OWNER_VAULT_PRINCIPAL): KnowledgeGateway {
   function toVaultWriteInput(input: NoteWriteInput) {
     return {
       path: input.path,
       rawMarkdown: input.rawMarkdown ?? null,
       document: (input.document ?? null) as VaultStructuredNoteDocument | null,
+      principal,
     }
   }
 
@@ -247,21 +262,16 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
 
   return {
     async getVaultSummary() {
-      const { getVaultIndex } = await import('../vault/service')
-      const index = await getVaultIndex()
-      return {
-        builtAt: index.builtAt,
-        stats: index.stats,
-        folders: index.folders,
-      }
+      const { getVaultSummary } = await import('../vault/service')
+      return getVaultSummary(principal)
     },
     async searchNotes(input) {
       const { searchVaultNotes } = await import('../vault/service')
-      return searchVaultNotes(input)
+      return searchVaultNotes({ ...input, principal })
     },
     async readNote(notePath) {
       const { getNoteByPath } = await import('../vault/service')
-      const result = await getNoteByPath(notePath)
+      const result = await getNoteByPath(notePath, principal)
       if (!result) {
         throw new Error(`Note not found: ${notePath}`)
       }
@@ -269,7 +279,7 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
     },
     async listFolder(folderPath = '') {
       const { getFolderListing } = await import('../vault/service')
-      const result = await getFolderListing(folderPath)
+      const result = await getFolderListing(folderPath, principal)
       if (!result) {
         throw new Error(`Folder not found: ${folderPath}`)
       }
@@ -277,7 +287,7 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
     },
     async getNeighborhood(notePath) {
       const { getNoteNeighborhoodByPath } = await import('../vault/service')
-      const result = await getNoteNeighborhoodByPath(notePath)
+      const result = await getNoteNeighborhoodByPath(notePath, principal)
       if (!result) {
         throw new Error(`Note not found: ${notePath}`)
       }
@@ -291,7 +301,7 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
       const { updateVaultNote } = await import('../vault/service')
       await assertExpectedContentHash(input.expectedContentHash, async () => {
         const { getNoteByPath } = await import('../vault/service')
-        const current = await getNoteByPath(input.path)
+        const current = await getNoteByPath(input.path, principal)
         if (!current) {
           throw new Error(`Note not found: ${input.path}`)
         }
@@ -303,17 +313,17 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
       const { moveVaultNote } = await import('../vault/service')
       await assertExpectedContentHash(input.expectedContentHash, async () => {
         const { getNoteByPath } = await import('../vault/service')
-        const current = await getNoteByPath(input.path)
+        const current = await getNoteByPath(input.path, principal)
         if (!current) {
           throw new Error(`Note not found: ${input.path}`)
         }
         return current
       })
-      return addContentHash(await moveVaultNote(input))
+      return addContentHash(await moveVaultNote({ ...input, principal }))
     },
     async deleteNote(notePath) {
       const { deleteVaultNote } = await import('../vault/service')
-      return deleteVaultNote(notePath)
+      return deleteVaultNote(notePath, principal)
     },
     async proposeSharedSpace(input) {
       const { SharedSpaceService } = await import('../shared-spaces/service')
@@ -335,9 +345,12 @@ export function createDirectKnowledgeGateway(): KnowledgeGateway {
       const { SharedSpaceService } = await import('../shared-spaces/service')
       return new SharedSpaceService().revokeSharedSpace({ ownerPrincipalId: 'owner', sharedSpaceId })
     },
-    async redeemSharedSpaceInvite(inviteUrl) {
+    async redeemSharedSpaceInvite(inviteUrl, idempotencyKey) {
       const { SharedSpaceService } = await import('../shared-spaces/service')
-      return new SharedSpaceService().redeemSharedSpaceInvite({ inviteUrl })
+      return new SharedSpaceService().redeemSharedSpaceInvite({
+        inviteUrl,
+        idempotencyKey: idempotencyKey ?? deriveMcpIdempotencyKey(inviteUrl),
+      })
     },
     async createSharedSpaceInvite(sharedSpaceId) {
       const { SharedSpaceService } = await import('../shared-spaces/service')
@@ -434,7 +447,11 @@ export function createRemoteKnowledgeGateway(config: {
     listSharedSpaces: () => request('/api/shared-spaces/'),
     getSharedSpace: (sharedSpaceId) => request(`/api/shared-spaces/${encodeURIComponent(sharedSpaceId)}`),
     revokeSharedSpace: (sharedSpaceId) => request(`/api/shared-spaces/${encodeURIComponent(sharedSpaceId)}/revoke`, { method: 'POST' }),
-    redeemSharedSpaceInvite: (inviteUrl) => request('/api/shared-spaces/invites/redeem', { method: 'POST', body: JSON.stringify({ inviteUrl }) }),
+    redeemSharedSpaceInvite: (inviteUrl, idempotencyKey) => request('/api/shared-spaces/invites/redeem', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey ?? deriveMcpIdempotencyKey(inviteUrl) },
+      body: JSON.stringify({ inviteUrl }),
+    }),
     createSharedSpaceInvite: (sharedSpaceId) => request(`/api/shared-spaces/${encodeURIComponent(sharedSpaceId)}/invites`, { method: 'POST' }),
     extendSharedSpace: (input) => request(`/api/shared-spaces/${encodeURIComponent(input.sharedSpaceId)}/extend`, { method: 'POST', body: JSON.stringify(input) }),
   }

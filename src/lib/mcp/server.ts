@@ -50,6 +50,9 @@ const moveSchema = z.object({
 const permissionsSchema = z.array(z.enum(['read', 'write'])).min(1).max(2).optional()
 const sharedSpaceIdSchema = z.string().trim().min(1).max(256)
 const sharedSpaceDurationSchema = z.number().int().min(1).max(183).optional()
+const idempotencyKeySchema = z.string().trim().min(22).max(256).regex(/^[A-Za-z0-9._~-]+$/).optional()
+
+export type McpSurface = 'owner' | 'shared-read' | 'shared-read-write' | 'bootstrap'
 
 function asResourcePath(value: string | string[] | undefined): string {
   const encodedPath = Array.isArray(value) ? value.join('/') : value ?? ''
@@ -125,7 +128,25 @@ async function callGateway(operation: () => Promise<unknown>) {
   }
 }
 
-function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
+function registerRedemptionTool(server: McpServer, gateway: KnowledgeGateway): void {
+  server.registerTool(
+    'redeem_shared_space_invite',
+    {
+      title: 'Redeem shared-space invite',
+      description: 'Redeem a one-time invite URL for a scoped access token.',
+      inputSchema: z.object({ inviteUrl: z.string().url().max(4_096), idempotencyKey: idempotencyKeySchema }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    (input) => callGateway(() => gateway.redeemSharedSpaceInvite(input.inviteUrl, input.idempotencyKey)),
+  )
+}
+
+function registerTools(server: McpServer, gateway: KnowledgeGateway, surface: McpSurface): void {
+  if (surface === 'bootstrap') {
+    registerRedemptionTool(server, gateway)
+    return
+  }
+
   server.registerTool(
     'get_vault_summary',
     {
@@ -187,49 +208,55 @@ function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
     (input) => callGateway(() => gateway.getNeighborhood(input.path)),
   )
 
-  server.registerTool(
-    'create_note',
-    {
-      title: 'Create note',
-      description: 'Create a markdown note in the shared knowledge space.',
-      inputSchema: noteCreateSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    },
-    (input) => callGateway(() => gateway.createNote(input)),
-  )
+  if (surface !== 'shared-read') {
+    server.registerTool(
+      'create_note',
+      {
+        title: 'Create note',
+        description: 'Create a markdown note in the shared knowledge space.',
+        inputSchema: noteCreateSchema,
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      },
+      (input) => callGateway(() => gateway.createNote(input)),
+    )
 
-  server.registerTool(
-    'update_note',
-    {
-      title: 'Update note',
-      description: 'Replace one existing markdown note in the shared knowledge space.',
-      inputSchema: noteUpdateSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    },
-    (input) => callGateway(() => gateway.updateNote(input)),
-  )
+    server.registerTool(
+      'update_note',
+      {
+        title: 'Update note',
+        description: 'Replace one existing markdown note in the shared knowledge space.',
+        inputSchema: noteUpdateSchema,
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      },
+      (input) => callGateway(() => gateway.updateNote(input)),
+    )
 
-  server.registerTool(
-    'move_note',
-    {
-      title: 'Move note',
-      description: 'Move a note to another path without overwriting an existing destination.',
-      inputSchema: moveSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-    },
-    (input) => callGateway(() => gateway.moveNote(input)),
-  )
+    server.registerTool(
+      'move_note',
+      {
+        title: 'Move note',
+        description: 'Move a note to another path without overwriting an existing destination.',
+        inputSchema: moveSchema,
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+      },
+      (input) => callGateway(() => gateway.moveNote(input)),
+    )
 
-  server.registerTool(
-    'delete_note',
-    {
-      title: 'Delete note',
-      description: 'Delete one markdown note from the shared knowledge space.',
-      inputSchema: z.object({ path: pathSchema }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    },
-    (input) => callGateway(() => gateway.deleteNote(input.path)),
-  )
+    server.registerTool(
+      'delete_note',
+      {
+        title: 'Delete note',
+        description: 'Delete one markdown note from the shared knowledge space.',
+        inputSchema: z.object({ path: pathSchema }),
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      },
+      (input) => callGateway(() => gateway.deleteNote(input.path)),
+    )
+  }
+
+  if (surface !== 'owner') {
+    return
+  }
 
   server.registerTool(
     'propose_shared_space',
@@ -291,16 +318,7 @@ function registerTools(server: McpServer, gateway: KnowledgeGateway): void {
     (input) => callGateway(() => gateway.revokeSharedSpace(input.sharedSpaceId)),
   )
 
-  server.registerTool(
-    'redeem_shared_space_invite',
-    {
-      title: 'Redeem shared-space invite',
-      description: 'Redeem a one-time invite URL for a scoped access token.',
-      inputSchema: z.object({ inviteUrl: z.string().url().max(4_096) }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    },
-    (input) => callGateway(() => gateway.redeemSharedSpaceInvite(input.inviteUrl)),
-  )
+  registerRedemptionTool(server, gateway)
 
   server.registerTool(
     'create_shared_space_invite',
@@ -360,9 +378,11 @@ function registerResources(server: McpServer, gateway: KnowledgeGateway): void {
   )
 }
 
-export function createNabuMcpServer(gateway: KnowledgeGateway): McpServer {
+export function createNabuMcpServer(gateway: KnowledgeGateway, surface: McpSurface = 'owner'): McpServer {
   const server = new McpServer({ name: 'nabu', version: '0.5.1' })
-  registerTools(server, gateway)
-  registerResources(server, gateway)
+  registerTools(server, gateway, surface)
+  if (surface !== 'bootstrap') {
+    registerResources(server, gateway)
+  }
   return server
 }

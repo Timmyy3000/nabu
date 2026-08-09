@@ -32,7 +32,10 @@ export type AgentBootstrapContract = {
     directEnvironment: ['NABU_MCP_MODE=direct', 'KNOWLEDGE_PATH=<absolute-vault-path>']
     remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_PASSWORD=<same-password-as-Nabu>']
     transport: 'stdio'
-    nativeRemoteEndpoint: 'separate follow-up'
+    nativeRemoteEndpoint: '/mcp'
+    nativeRemoteTransport: 'streamable-http-stateless'
+    nativeRemoteAuth: 'Authorization: Bearer'
+    bootstrap: 'No Authorization header exposes only redeem_shared_space_invite; persist the returned scoped token.'
   }
 }
 
@@ -69,7 +72,10 @@ export function getAgentBootstrapContract(): AgentBootstrapContract {
       directEnvironment: ['NABU_MCP_MODE=direct', 'KNOWLEDGE_PATH=<absolute-vault-path>'],
       remoteEnvironment: ['NABU_MCP_MODE=remote', 'NABU_URL=<https-url>', 'NABU_PASSWORD=<same-password-as-Nabu>'],
       transport: 'stdio',
-      nativeRemoteEndpoint: 'separate follow-up',
+      nativeRemoteEndpoint: '/mcp',
+      nativeRemoteTransport: 'streamable-http-stateless',
+      nativeRemoteAuth: 'Authorization: Bearer',
+      bootstrap: 'No Authorization header exposes only redeem_shared_space_invite; persist the returned scoped token.',
     },
   }
 }
