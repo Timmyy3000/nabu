@@ -24,6 +24,7 @@ async function fetchChecked(fetchImpl, url, label, timeoutMs) {
 
 function collectLocalAssets(html, origin) {
   const candidates = []
+  let hasExecutableBootstrap = false
   const attribute = (tag, name) => tag.match(new RegExp(`\\b${name}=["']([^"']+)["']`, 'i'))?.[1]
   for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
     const tag = match[0]
@@ -33,20 +34,30 @@ function collectLocalAssets(html, origin) {
       candidates.push({ href, kind: rel.includes('stylesheet') ? 'stylesheet' : 'preload' })
     }
   }
-  for (const match of html.matchAll(/<script\b[^>]*>/gi)) {
-    const src = attribute(match[0], 'src')
+  for (const match of html.matchAll(/<script\b([^>]*?)(?:>([\s\S]*?)<\/script\s*>|\/?>)/gi)) {
+    const attributes = match[1] ?? ''
+    const src = attribute(attributes, 'src')
     if (src) {
-      candidates.push({ href: src, kind: 'script' })
+      const url = new URL(src, origin)
+      if (url.origin === origin.origin) {
+        candidates.push({ href: src, kind: 'script' })
+        hasExecutableBootstrap = true
+      }
+    } else if (attribute(attributes, 'type')?.trim().toLowerCase() === 'module' && match[2]?.trim()) {
+      hasExecutableBootstrap = true
     }
   }
 
-  return candidates.flatMap((candidate) => {
-    const url = new URL(candidate.href, origin)
-    if (url.origin !== origin.origin) {
-      return []
-    }
-    return [{ ...candidate, url }]
-  })
+  return {
+    assets: candidates.flatMap((candidate) => {
+      const url = new URL(candidate.href, origin)
+      if (url.origin !== origin.origin) {
+        return []
+      }
+      return [{ ...candidate, url }]
+    }),
+    hasExecutableBootstrap,
+  }
 }
 
 export async function verifyDeployment(baseUrl, fetchImpl = fetch, options = {}) {
@@ -60,17 +71,24 @@ export async function verifyDeployment(baseUrl, fetchImpl = fetch, options = {})
   }
 
   const html = await pageResponse.text()
-  const assets = collectLocalAssets(html, origin)
+  const { assets, hasExecutableBootstrap } = collectLocalAssets(html, origin)
   if (!assets.some((asset) => asset.kind === 'stylesheet')) {
     throw new Error('Login page did not reference a local stylesheet')
   }
-  if (!assets.some((asset) => asset.kind === 'script')) {
+  if (!hasExecutableBootstrap) {
+    throw new Error('Login page did not reference a local JavaScript asset')
+  }
+  if (!assets.some((asset) => asset.kind === 'script' || asset.kind === 'preload')) {
     throw new Error('Login page did not reference a local JavaScript asset')
   }
 
   const stylesheetBodies = []
   for (const asset of assets) {
-    const label = asset.kind === 'stylesheet' ? 'stylesheet' : 'JavaScript'
+    const label = asset.kind === 'stylesheet'
+      ? 'stylesheet'
+      : asset.kind === 'preload'
+        ? 'JavaScript module preload'
+        : 'JavaScript'
     const response = await fetchChecked(fetchImpl, asset.url, label, timeoutMs)
     const contentType = response.headers.get('content-type') ?? ''
     const body = await response.text()

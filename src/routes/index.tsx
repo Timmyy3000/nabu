@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { getVaultBrowseData, searchVaultNotes } from '../lib/vault/service'
+import { fetchPublicPageData } from '../lib/vault/public-page-client'
 import { HomePage } from '../pages/home'
 
 const getAuthStatus = createServerFn({ method: 'POST' })
@@ -96,6 +97,9 @@ const loadVaultSearch = createServerFn({ method: 'POST' })
 export const Route = createFileRoute('/')({
   beforeLoad: async ({ location }) => {
     const token = new URLSearchParams(location.searchStr).get('token') ?? ''
+    if (token && typeof window !== 'undefined') {
+      return
+    }
     const auth = await getAuthStatus({ data: { token } })
 
     if (auth.owner && token) {
@@ -141,6 +145,18 @@ export const Route = createFileRoute('/')({
     token: search.token ?? '',
   }),
   loader: async ({ deps }) => {
+    if (deps.token && typeof window !== 'undefined') {
+      const page = await fetchPublicPageData(deps)
+      return {
+        browse: page?.browse ?? null,
+        search: page?.search ?? null,
+        searchPathInput: deps.searchPath,
+        searchTagInput: deps.searchTag,
+        shareToken: deps.token,
+        unavailable: page == null,
+      }
+    }
+
     const [browse, search] = await Promise.all([
       loadVaultBrowse({
         data: {
