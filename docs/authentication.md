@@ -34,18 +34,21 @@ Content-Type: application/json
 { "connectionUrl": "https://nabu.example.com/connect/agent/<opaque-secret>" }
 ```
 
-Successful redemption returns the durable bearer credential once. Store it in
-the agent's secret configuration and send it on subsequent requests as:
+Successful redemption returns the durable bearer credential once, together with
+an `expiresAt` timestamp 90 days after issuance. Store it in the agent's secret
+configuration and send it on subsequent requests as:
 
 ```http
 Authorization: Bearer <owner-agent-credential>
 ```
 
-The credential is stored server-side only as a SHA-256 hash and is scoped to
-the permissions selected at issuance. An invalid, expired, or already-used
-link returns `410 AGENT_CONNECTION_INVALID`. The current flow does not expose
-credential listing or revocation; protect generated links and credentials as
-secrets, and issue a new link if the redemption response is lost.
+The credential is stored server-side only as a SHA-256 hash, is scoped to the
+permissions selected at issuance, and is rejected after its expiry. An invalid,
+expired, or already-used link returns `410 AGENT_CONNECTION_INVALID`; an expired
+durable credential returns `401`. The current flow does not expose credential
+listing or manual revocation, so protect generated links and credentials as
+secrets and issue a new link when a credential expires or the redemption
+response is lost.
 
 Remote MCP accepts `NABU_AGENT_TOKEN` for this credential and retains
 `NABU_PASSWORD` as the backwards-compatible setup path. The owner-agent

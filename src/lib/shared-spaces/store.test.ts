@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { __resetSharedSpaceStoreForTests, getSharedSpaceStore } from './store'
 import { hashSecret } from './crypto'
+import { OWNER_AGENT_CREDENTIAL_TTL_MS } from '../auth/types'
 
 const require = createRequire(import.meta.url)
 const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite')
@@ -111,6 +112,35 @@ describe('shared-space store configuration and persistence', () => {
     await expect(getSharedSpaceStore()).rejects.toThrow('NABU_DATA_PATH is required in production')
   })
 
+  it('migrates legacy owner-agent credentials to a finite expiry', async () => {
+    process.env.NODE_ENV = 'test'
+    const dataPath = await createDataPath()
+    process.env.NABU_DATA_PATH = dataPath
+    const db = new DatabaseSync(path.join(dataPath, 'shared-spaces.sqlite'))
+    db.exec(`
+      CREATE TABLE owner_agent_credentials (
+        id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        permissions_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        revoked_at INTEGER,
+        last_used_at INTEGER
+      );
+    `)
+    db.prepare(`
+      INSERT INTO owner_agent_credentials
+        (id, token_hash, permissions_json, created_at, revoked_at, last_used_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run('legacy-credential', hashSecret('legacy-secret'), '["read"]', 1_000, null, null)
+    db.close()
+
+    const store = await getSharedSpaceStore()
+    expect(store.getOwnerAgentCredentialForTest(hashSecret('legacy-secret'))).toMatchObject({
+      id: 'legacy-credential',
+      expiresAt: 1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS,
+    })
+  })
+
   it('rotates one hashed read link row atomically per shared space', async () => {
     process.env.NODE_ENV = 'test'
     process.env.NABU_DATA_PATH = await createDataPath()
@@ -211,6 +241,7 @@ describe('shared-space store configuration and persistence', () => {
         id: 'agent-credential-1',
         tokenHash: hashSecret(credentialSecret),
         createdAt: 1_000,
+        expiresAt: 1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS,
         revokedAt: null,
         lastUsedAt: null,
       },
@@ -218,9 +249,10 @@ describe('shared-space store configuration and persistence', () => {
 
     expect(redeemed).toMatchObject({
       connection: { consumedAt: 1_000, credentialId: 'agent-credential-1' },
-      credential: { permissions: ['read', 'write'] },
+      credential: { permissions: ['read', 'write'], expiresAt: 1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS },
     })
-    expect(store.findOwnerAgentCredential(hashSecret(credentialSecret))).toMatchObject({ id: 'agent-credential-1' })
+    expect(store.findOwnerAgentCredential(hashSecret(credentialSecret), 1_000)).toMatchObject({ id: 'agent-credential-1' })
+    expect(store.findOwnerAgentCredential(hashSecret(credentialSecret), 1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS)).toBeNull()
 
     __resetSharedSpaceStoreForTests()
     const reopenedStore = await getSharedSpaceStore()

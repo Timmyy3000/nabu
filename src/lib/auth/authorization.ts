@@ -107,7 +107,7 @@ export async function resolveVaultPrincipal(
 
   const store = await getSharedSpaceStore()
   if (bearerToken) {
-    const ownerAgentCredential = store.findOwnerAgentCredential(hashSecret(bearerToken))
+    const ownerAgentCredential = store.findOwnerAgentCredential(hashSecret(bearerToken), nowMs)
     if (ownerAgentCredential) {
       store.touchOwnerAgentCredential(ownerAgentCredential.id, nowMs)
       return {

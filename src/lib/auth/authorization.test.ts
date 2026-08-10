@@ -11,7 +11,7 @@ import {
   toVaultAuthorizationResponse,
   toVaultWriteAuthorizationResponse,
 } from './authorization'
-import { AgentConnectionService } from './agent-connection'
+import { AgentConnectionService, OWNER_AGENT_CREDENTIAL_TTL_MS } from './agent-connection'
 import { hashSecret } from '../shared-spaces/crypto'
 import { requireSharedSpaceOwner } from '../shared-spaces/http'
 import { SharedSpaceService, __resetSharedSpaceServiceForTests } from '../shared-spaces/service'
@@ -80,13 +80,14 @@ describe('vault authorization', () => {
 
   it('resolves durable owner-agent credentials with selected permissions but no management elevation', async () => {
     await fixture()
-    const service = new AgentConnectionService({ now: () => 1_000, baseUrl: 'http://localhost:3000' })
+    const now = Date.now()
+    const service = new AgentConnectionService({ now: () => now, baseUrl: 'http://localhost:3000' })
     const issued = await service.issueConnection({ ownerPrincipalId: 'owner', permissions: ['read'] })
     const redeemed = await service.redeemConnection({ connectionUrl: issued.connectionUrl })
 
     const principal = await resolveVaultPrincipal(
       new Request('http://localhost', { headers: { authorization: `Bearer ${redeemed.credential}` } }),
-      1_000,
+      now,
     )
 
     expect(principal).toMatchObject({
@@ -107,6 +108,13 @@ describe('vault authorization', () => {
       new Request('http://localhost', { headers: { authorization: `Bearer ${redeemed.credential}` } }),
     )
     expect(sharedSpaceManagement.response?.status).toBe(403)
+
+    expect(
+      await resolveVaultPrincipal(
+        new Request('http://localhost', { headers: { authorization: `Bearer ${redeemed.credential}` } }),
+        now + OWNER_AGENT_CREDENTIAL_TTL_MS,
+      ),
+    ).toBeNull()
   })
 
   it('converts scoped authorization failures into safe HTTP responses', async () => {

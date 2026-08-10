@@ -2,10 +2,11 @@ import { mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import type { DatabaseSync as DatabaseSyncType } from 'node:sqlite'
-import type {
-  OwnerAgentConnectionRecord,
-  OwnerAgentCredentialInput,
-  OwnerAgentCredentialRecord,
+import {
+  OWNER_AGENT_CREDENTIAL_TTL_MS,
+  type OwnerAgentConnectionRecord,
+  type OwnerAgentCredentialInput,
+  type OwnerAgentCredentialRecord,
 } from '../auth/types'
 import type {
   SharedSpaceAccessTokenRecord,
@@ -67,7 +68,7 @@ export type SharedSpaceStore = {
     now: number
     credential: OwnerAgentCredentialInput
   }) => { connection: OwnerAgentConnectionRecord; credential: OwnerAgentCredentialRecord } | null
-  findOwnerAgentCredential: (tokenHash: string) => OwnerAgentCredentialRecord | null
+  findOwnerAgentCredential: (tokenHash: string, now: number) => OwnerAgentCredentialRecord | null
   touchOwnerAgentCredential: (id: string, now: number) => void
   getOwnerAgentConnectionForTest: (tokenHash: string) => OwnerAgentConnectionRecord | null
   getOwnerAgentCredentialForTest: (tokenHash: string) => OwnerAgentCredentialRecord | null
@@ -198,6 +199,7 @@ function mapOwnerAgentCredential(row: SqlRow): OwnerAgentCredentialRecord {
     tokenHash: asString(row.token_hash),
     permissions: asPermissions(row.permissions_json),
     createdAt: asNumber(row.created_at),
+    expiresAt: asNumber(row.expires_at),
     revokedAt: asNullableNumber(row.revoked_at),
     lastUsedAt: asNullableNumber(row.last_used_at),
   }
@@ -291,6 +293,7 @@ function createStore(databasePath: string): SharedSpaceStore {
       token_hash TEXT NOT NULL UNIQUE,
       permissions_json TEXT NOT NULL,
       created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
       revoked_at INTEGER,
       last_used_at INTEGER
     );
@@ -306,6 +309,7 @@ function createStore(databasePath: string): SharedSpaceStore {
   // this store so reopening the same durable database is sufficient.
   const proposalColumns = db.prepare('PRAGMA table_info(shared_space_proposals)').all() as SqlRow[]
   const inviteColumns = db.prepare('PRAGMA table_info(shared_space_invites)').all() as SqlRow[]
+  const ownerAgentCredentialColumns = db.prepare('PRAGMA table_info(owner_agent_credentials)').all() as SqlRow[]
   const hasColumn = (columns: SqlRow[], name: string) => columns.some((column) => asString(column.name) === name)
   if (!hasColumn(proposalColumns, 'contract_version')) db.exec('ALTER TABLE shared_space_proposals ADD COLUMN contract_version INTEGER')
   if (!hasColumn(proposalColumns, 'requested_duration_days')) db.exec('ALTER TABLE shared_space_proposals ADD COLUMN requested_duration_days INTEGER')
@@ -313,6 +317,10 @@ function createStore(databasePath: string): SharedSpaceStore {
   if (!hasColumn(inviteColumns, 'idempotency_key_hash')) db.exec('ALTER TABLE shared_space_invites ADD COLUMN idempotency_key_hash TEXT')
   if (!hasColumn(inviteColumns, 'access_token_hash')) db.exec('ALTER TABLE shared_space_invites ADD COLUMN access_token_hash TEXT')
   if (!hasColumn(inviteColumns, 'access_token_id')) db.exec('ALTER TABLE shared_space_invites ADD COLUMN access_token_id TEXT')
+  if (!hasColumn(ownerAgentCredentialColumns, 'expires_at')) {
+    db.exec('ALTER TABLE owner_agent_credentials ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0')
+    db.exec(`UPDATE owner_agent_credentials SET expires_at = created_at + ${OWNER_AGENT_CREDENTIAL_TTL_MS} WHERE expires_at = 0`)
+  }
 
   return {
     createProposal(proposal) {
@@ -743,13 +751,14 @@ function createStore(databasePath: string): SharedSpaceStore {
         }
         db.prepare(`
           INSERT INTO owner_agent_credentials
-            (id, token_hash, permissions_json, created_at, revoked_at, last_used_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+            (id, token_hash, permissions_json, created_at, expires_at, revoked_at, last_used_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(
           credential.id,
           credential.tokenHash,
           serializePermissions(credential.permissions),
           credential.createdAt,
+          credential.expiresAt,
           credential.revokedAt,
           credential.lastUsedAt,
         )
@@ -765,7 +774,7 @@ function createStore(databasePath: string): SharedSpaceStore {
       })
     },
 
-    findOwnerAgentCredential(tokenHash) {
+    findOwnerAgentCredential(tokenHash, now) {
       const row = db.prepare(
         'SELECT * FROM owner_agent_credentials WHERE token_hash = ?',
       ).get(tokenHash) as SqlRow | undefined
@@ -774,7 +783,7 @@ function createStore(databasePath: string): SharedSpaceStore {
       }
 
       const credential = mapOwnerAgentCredential(row)
-      return credential.revokedAt == null ? credential : null
+      return credential.revokedAt == null && credential.expiresAt > now ? credential : null
     },
 
     touchOwnerAgentCredential(id, now) {

@@ -2,6 +2,9 @@ import { generateId, generateOpaqueSecret, hashSecret } from '../shared-spaces/c
 import { resolveCanonicalLink, resolveCanonicalPath, resolveCanonicalPublicUrl } from '../shared-spaces/public-url'
 import { getSharedSpaceStore } from '../shared-spaces/store'
 import type { SharedSpacePermission } from '../shared-spaces/types'
+import { OWNER_AGENT_CREDENTIAL_TTL_MS } from './types'
+
+export { OWNER_AGENT_CREDENTIAL_TTL_MS } from './types'
 
 export const AGENT_CONNECTION_TTL_MS = 10 * 60 * 1_000
 
@@ -25,6 +28,7 @@ export type AgentConnectionRedemptionResult = {
   permissions: SharedSpacePermission[]
   credential: string
   createdAt: string
+  expiresAt: string
   nextAction: 'configure_agent'
 }
 
@@ -105,10 +109,12 @@ function extractConnectionSecret(value: string): string {
     }
 
     const segments = url.pathname.split('/').filter(Boolean)
-    const secret = segments.at(-1)
-    if (segments.at(-3) !== 'connect' || segments.at(-2) !== 'agent' || !secret) {
+    const agentIndex = segments.lastIndexOf('agent')
+    if (agentIndex < 1 || segments[agentIndex - 1] !== 'connect' || agentIndex !== segments.length - 2) {
       throw new Error('invalid connection path')
     }
+
+    const secret = segments[agentIndex + 1]
 
     const decoded = decodeURIComponent(secret)
     if (!/^[A-Za-z0-9_-]+$/.test(decoded)) {
@@ -164,6 +170,7 @@ export class AgentConnectionService {
     const now = this.now()
     const credential = generateOpaqueSecret()
     const credentialId = generateId('agent-credential')
+    const credentialExpiresAt = now + OWNER_AGENT_CREDENTIAL_TTL_MS
     const store = await getSharedSpaceStore()
     const redemption = store.redeemOwnerAgentConnection({
       tokenHash: hashSecret(secret),
@@ -172,6 +179,7 @@ export class AgentConnectionService {
         id: credentialId,
         tokenHash: hashSecret(credential),
         createdAt: now,
+        expiresAt: credentialExpiresAt,
         revokedAt: null,
         lastUsedAt: null,
       },
@@ -186,6 +194,7 @@ export class AgentConnectionService {
       permissions: redemption.credential.permissions,
       credential,
       createdAt: iso(redemption.credential.createdAt),
+      expiresAt: iso(redemption.credential.expiresAt),
       nextAction: 'configure_agent',
     }
   }

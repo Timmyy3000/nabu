@@ -94,8 +94,9 @@ Owner connection metadata is stored in the same server-side SQLite database at
 `owner_agent_connections` table stores only the SHA-256 hash of each one-time
 link secret, the selected permissions, owner principal, expiry, and redemption
 state. The `owner_agent_credentials` table stores only the SHA-256 hash of the
-durable credential and its permissions and usage metadata. Redemption runs in
-one SQLite transaction so concurrent requests can produce at most one
+durable credential, its permissions, a 90-day expiry, and usage metadata.
+Authorization rejects the credential at or after that expiry. Redemption runs
+in one SQLite transaction so concurrent requests can produce at most one
 credential.
 
 The flow is deliberately split into two public boundaries:
@@ -105,8 +106,9 @@ The flow is deliberately split into two public boundaries:
 2. An agent calls `POST /api/agent/connections/redeem` with the full link. The
    server consumes the link and returns the durable credential once.
 3. The agent uses `Authorization: Bearer <credential>` for the existing vault
-   API. `NABU_AGENT_TOKEN` is the preferred remote MCP configuration; the
-   password-derived bearer remains available for existing installations.
+   API until the returned `expiresAt`. `NABU_AGENT_TOKEN` is the preferred
+   remote MCP configuration; the password-derived bearer remains available for
+   existing installations.
 
 The handoff page at `/connect/agent/<secret>` is informational and does not
 redeem the link. This keeps opening or copying the link from consuming it and

@@ -71,7 +71,7 @@ export function getAgentBootstrapContract(): AgentBootstrapContract {
       issue: '/api/agent/connections',
       redemption: '/api/agent/connections/redeem',
       handoff: '/connect/agent/<secret>',
-      note: 'A human owner can issue a short-lived one-time connection URL in Settings. Redeem it once to receive a durable permission-scoped owner-agent credential; the durable credential is never in the URL.',
+      note: 'A human owner can issue a short-lived one-time connection URL in Settings. Redeem it once to receive a permission-scoped owner-agent credential that expires after 90 days; the durable credential is never in the URL.',
     },
     revisions: {
       etag: 'ETag',

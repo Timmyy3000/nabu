@@ -71,7 +71,7 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     '- Issue a link with `POST ' + ownerAgentConnectionUrl + '` using the owner session cookie and JSON body `{ "permissions": ["read"] }` or `{ "permissions": ["read", "write"] }`.',
     '- The response contains an opaque `connectionUrl`, its permission set, expiry, and a redemption descriptor. The URL expires after 10 minutes and works once.',
     '- Send the full URL to the agent. The agent redeems it with `POST ' + ownerAgentRedemptionUrl + '` and JSON body `{ "connectionUrl": "<full-url>" }`. Do not GET or alter the URL.',
-    '- A successful redemption returns the durable `credential`, `permissions`, `apiBaseUrl`, `createdAt`, and `nextAction: "configure_agent"`. Store the credential in the agent secret store immediately; never print or put it in a URL.',
+    '- A successful redemption returns the durable `credential`, `permissions`, `apiBaseUrl`, `createdAt`, `expiresAt` (90 days after issuance), and `nextAction: "configure_agent"`. Store the credential in the agent secret store immediately; never print or put it in a URL. After expiry, ask the owner to issue a new link.',
     '- A second, malformed, or expired redemption returns `410 AGENT_CONNECTION_INVALID`. If the first response is lost, ask the owner to generate a new link; the spent link is not replayable.',
     '- Remote MCP may use `NABU_AGENT_TOKEN=<issued-credential>` with `NABU_URL=<https-url>`. Existing agents may continue using `NABU_PASSWORD=<same-password-as-Nabu>`.',
     '',

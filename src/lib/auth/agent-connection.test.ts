@@ -7,6 +7,7 @@ import { __resetSharedSpaceServiceForTests } from '../shared-spaces/service'
 import { __resetSharedSpaceStoreForTests, getSharedSpaceStore } from '../shared-spaces/store'
 import {
   AGENT_CONNECTION_TTL_MS,
+  OWNER_AGENT_CREDENTIAL_TTL_MS,
   AgentConnectionError,
   AgentConnectionService,
 } from './agent-connection'
@@ -77,6 +78,17 @@ describe('owner agent connection service', () => {
     await expect(service.issueConnection({ ownerPrincipalId: 'owner', permissions: ['write'] })).rejects.toBeInstanceOf(AgentConnectionError)
   })
 
+  it('redeems connection links when the public URL has a path prefix', async () => {
+    await fixture()
+    const service = new AgentConnectionService({ now: () => 1_000, baseUrl: 'https://nabu.example/base' })
+    const issued = await service.issueConnection({ ownerPrincipalId: 'owner', permissions: ['read'] })
+
+    await expect(service.redeemConnection({ connectionUrl: issued.connectionUrl })).resolves.toMatchObject({
+      apiBaseUrl: 'https://nabu.example/base',
+      expiresAt: new Date(1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS).toISOString(),
+    })
+  })
+
   it('redeems exactly once and returns a durable credential without storing its raw value', async () => {
     await fixture()
     const service = new AgentConnectionService({ now: () => 1_000, baseUrl: 'https://nabu.example' })
@@ -89,6 +101,7 @@ describe('owner agent connection service', () => {
       apiBaseUrl: 'https://nabu.example',
       nextAction: 'configure_agent',
       createdAt: new Date(1_000).toISOString(),
+      expiresAt: new Date(1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS).toISOString(),
     })
     expect(redeemed.credential).toMatch(/^[A-Za-z0-9_-]{40,}$/)
     expect(redeemed.credential).not.toContain(issued.connectionUrl)
@@ -101,7 +114,12 @@ describe('owner agent connection service', () => {
     const connection = store.getOwnerAgentConnectionForTest(hashSecret(secretFromUrl(issued.connectionUrl)))
     const credential = store.getOwnerAgentCredentialForTest(hashSecret(redeemed.credential))
     expect(connection).toMatchObject({ consumedAt: 1_000, credentialId: credential?.id })
-    expect(credential).toMatchObject({ permissions: ['read'], revokedAt: null, lastUsedAt: null })
+    expect(credential).toMatchObject({
+      permissions: ['read'],
+      expiresAt: 1_000 + OWNER_AGENT_CREDENTIAL_TTL_MS,
+      revokedAt: null,
+      lastUsedAt: null,
+    })
     expect(credential?.tokenHash).not.toContain(redeemed.credential)
   })
 

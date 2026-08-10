@@ -104,6 +104,7 @@ describe('owner agent connection HTTP API', () => {
     expect(first.headers.get('Cache-Control')).toBe('no-store')
     expect(first.headers.get('Referrer-Policy')).toBe('no-referrer')
     expect(firstBody).toMatchObject({ permissions: ['read', 'write'], nextAction: 'configure_agent' })
+    expect(firstBody.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(firstBody.credential).toMatch(/^[A-Za-z0-9_-]{40,}$/)
 
     const second = await redeemHandler({

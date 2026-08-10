@@ -38,8 +38,8 @@ Keep `NABU_DATA_PATH` on persistent storage. It contains lease metadata and
 credential hashes, never raw invite, connection-link, or access-token secrets.
 After deployment, an owner can open **Settings → Agents**, choose read or
 read-write permissions, and generate a one-time connection link for an agent.
-The link expires after 10 minutes and exchanges for a durable credential; it
-does not contain that credential.
+The link expires after 10 minutes and exchanges for a credential that expires
+after 90 days; the link does not contain that credential.
 
 ## Local MCP access
 
