@@ -186,4 +186,48 @@ describe('shared-space store configuration and persistence', () => {
     })
     expect(store.getReadLinkForTest(space.id)).toMatchObject({ id: second.id })
   })
+
+  it('persists owner-agent connection consumption and credential hashes across reopen', async () => {
+    process.env.NODE_ENV = 'test'
+    process.env.NABU_DATA_PATH = await createDataPath()
+    const store = await getSharedSpaceStore()
+    const connectionSecret = 'connection-secret'
+    const credentialSecret = 'credential-secret'
+
+    store.createOwnerAgentConnection({
+      id: 'agent-connection-1',
+      ownerPrincipalId: 'owner',
+      tokenHash: hashSecret(connectionSecret),
+      permissions: ['read', 'write'],
+      createdAt: 1_000,
+      expiresAt: 10_000,
+      consumedAt: null,
+      credentialId: null,
+    })
+    const redeemed = store.redeemOwnerAgentConnection({
+      tokenHash: hashSecret(connectionSecret),
+      now: 1_000,
+      credential: {
+        id: 'agent-credential-1',
+        tokenHash: hashSecret(credentialSecret),
+        createdAt: 1_000,
+        revokedAt: null,
+        lastUsedAt: null,
+      },
+    })
+
+    expect(redeemed).toMatchObject({
+      connection: { consumedAt: 1_000, credentialId: 'agent-credential-1' },
+      credential: { permissions: ['read', 'write'] },
+    })
+    expect(store.findOwnerAgentCredential(hashSecret(credentialSecret))).toMatchObject({ id: 'agent-credential-1' })
+
+    __resetSharedSpaceStoreForTests()
+    const reopenedStore = await getSharedSpaceStore()
+    expect(reopenedStore.getOwnerAgentConnectionForTest(hashSecret(connectionSecret))).toMatchObject({ consumedAt: 1_000 })
+    expect(reopenedStore.getOwnerAgentCredentialForTest(hashSecret(credentialSecret))).toMatchObject({
+      id: 'agent-credential-1',
+      permissions: ['read', 'write'],
+    })
+  })
 })

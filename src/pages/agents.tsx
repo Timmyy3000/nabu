@@ -15,6 +15,8 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
   const proposalUrl = withBaseUrl(baseUrl, '/api/shared-spaces/proposals')
   const sharedSpacesUrl = withBaseUrl(baseUrl, '/api/shared-spaces/')
   const redeemUrl = withBaseUrl(baseUrl, '/api/shared-spaces/invites/redeem')
+  const ownerAgentConnectionUrl = withBaseUrl(baseUrl, '/api/agent/connections')
+  const ownerAgentRedemptionUrl = withBaseUrl(baseUrl, '/api/agent/connections/redeem')
   const readLinkUrl = withBaseUrl(baseUrl, '/api/shared-spaces/:sharedSpaceId/read-link')
   const notesUrl = withBaseUrl(baseUrl, '/api/vault/notes')
   const notesByPathUrl = withBaseUrl(baseUrl, '/api/vault/notes/by-path')
@@ -44,7 +46,7 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     '',
     '## Authentication',
     '',
-    '- Owner login and remote MCP use the same Nabu password; remote MCP derives its owner bearer credential internally.',
+    '- Owner login and legacy remote MCP use the same Nabu password; remote MCP derives its owner bearer credential internally when no issued agent token is configured.',
     '- Owner login uses `POST /api/auth/login` with `Content-Type: application/x-www-form-urlencoded` and fields `password` and `redirect`.',
     `- A successful login sets the ${bootstrap.auth.cookieName} session cookie. Persist it in a cookie jar and reuse it for owner requests.`,
     '- Shared collaborators use `Authorization: Bearer <scoped-access-token>`; they do not use the owner password.',
@@ -58,6 +60,23 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     "  -H 'Content-Type: application/x-www-form-urlencoded' \\",
     "  --data 'password=YOUR_PASSWORD&redirect=%2Fagents.md' \\",
     `  ${loginUrl}`,
+    '```',
+    '',
+    '## Owner agent connection link',
+    '',
+    'A human owner can create a non-technical agent connection from `Settings → Agents → Connect an agent`.',
+    '',
+    '- Issue a link with `POST ' + ownerAgentConnectionUrl + '` using the owner session cookie and JSON body `{ "permissions": ["read"] }` or `{ "permissions": ["read", "write"] }`.',
+    '- The response contains an opaque `connectionUrl`, its permission set, expiry, and a redemption descriptor. The URL expires after 10 minutes and works once.',
+    '- Send the full URL to the agent. The agent redeems it with `POST ' + ownerAgentRedemptionUrl + '` and JSON body `{ "connectionUrl": "<full-url>" }`. Do not GET or alter the URL.',
+    '- A successful redemption returns the durable `credential`, `permissions`, `apiBaseUrl`, `createdAt`, and `nextAction: "configure_agent"`. Store the credential in the agent secret store immediately; never print or put it in a URL.',
+    '- A second, malformed, or expired redemption returns `410 AGENT_CONNECTION_INVALID`. If the first response is lost, ask the owner to generate a new link; the spent link is not replayable.',
+    '- Remote MCP may use `NABU_AGENT_TOKEN=<issued-credential>` with `NABU_URL=<https-url>`. Existing agents may continue using `NABU_PASSWORD=<same-password-as-Nabu>`.',
+    '',
+    'Example redemption request:',
+    '',
+    '```json',
+    '{ "connectionUrl": "https://nabu.example.test/connect/agent/ONE_TIME_SECRET" }',
     '```',
     '',
     '## Note identity and read surfaces',
@@ -278,7 +297,7 @@ export function renderAgentsMarkdown(baseUrl = 'http://localhost:3000'): string 
     `- Deployed-service environment: ${bootstrap.mcp.remoteEnvironment.join(', ')}.`,
     `- Transport: ${bootstrap.mcp.transport}.`,
     `- Native remote MCP endpoint: ${bootstrap.mcp.nativeRemoteEndpoint}; do not assume it is the same as local stdio.`,
-    '- Use the same Nabu password for remote MCP, keep it outside the repository, and use HTTPS for non-loopback services.',
+    '- Use the issued owner-agent credential or the same Nabu password for remote MCP, keep secrets outside the repository, and use HTTPS for non-loopback services.',
     '- The MCP and HTTP layers use the same domain service and authorization rules.',
     '',
     '## Deployment requirements',

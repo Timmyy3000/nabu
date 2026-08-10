@@ -165,15 +165,16 @@ export function validateMcpEnvironment(
     }
   }
 
+  const credential = env.NABU_AGENT_TOKEN?.trim()
   const password = env.NABU_PASSWORD?.trim()
-  if (!password) {
-    throw new McpConfigurationError('NABU_PASSWORD is required in remote MCP mode')
+  if (!credential && !password) {
+    throw new McpConfigurationError('NABU_AGENT_TOKEN or NABU_PASSWORD is required in remote MCP mode')
   }
 
   return {
     mode,
     baseUrl: assertRemoteUrl(env.NABU_URL?.trim() ?? ''),
-    credential: deriveAgentCredential(password),
+    credential: credential ?? deriveAgentCredential(password!),
   }
 }
 

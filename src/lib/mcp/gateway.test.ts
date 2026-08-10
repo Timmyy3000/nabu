@@ -27,7 +27,7 @@ describe('MCP environment configuration', () => {
   it('rejects relative, in-app, and insecure remote configuration', () => {
     expect(() => validateMcpEnvironment({ KNOWLEDGE_PATH: 'vault' })).toThrow('must be absolute')
     expect(() => validateMcpEnvironment({ KNOWLEDGE_PATH: process.cwd() })).toThrow('outside')
-    expect(() => validateMcpEnvironment({ NABU_URL: 'https://nabu.example' })).toThrow('NABU_PASSWORD is required')
+    expect(() => validateMcpEnvironment({ NABU_URL: 'https://nabu.example' })).toThrow('NABU_AGENT_TOKEN or NABU_PASSWORD is required')
     expect(() => validateMcpEnvironment({ NABU_URL: 'http://nabu.example', NABU_PASSWORD: PASSWORD })).toThrow('HTTPS')
   })
 
@@ -43,6 +43,15 @@ describe('MCP environment configuration', () => {
 
     expect(thrown).toBeInstanceOf(McpConfigurationError)
     expect(String(thrown)).not.toContain(password)
+  })
+
+  it('accepts a durable owner-agent token without requiring the deployment password', () => {
+    const configuration = validateMcpEnvironment({
+      NABU_URL: 'https://nabu.example',
+      NABU_AGENT_TOKEN: 'durable-agent-token',
+    })
+
+    expect(configuration).toMatchObject({ mode: 'remote', credential: 'durable-agent-token' })
   })
 
   it('allows loopback HTTP and prepares a newly requested direct vault', async () => {

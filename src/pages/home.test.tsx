@@ -204,6 +204,7 @@ describe('HomePage', () => {
     const { container } = render(<HomePage browse={buildBrowseFixture()} search={null} searchPathInput="" searchTagInput="" />)
 
     expect(screen.getByLabelText(/𒀭 nabu/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'settings' })).toHaveAttribute('href', '/settings/agents')
     expect(screen.getByRole('heading', { name: /ideas/i })).toBeInTheDocument()
     expect(screen.getAllByText('ideas/alpha.md').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('heading', { name: 'alpha' })).toBeInTheDocument()
@@ -370,6 +371,7 @@ describe('HomePage', () => {
       token: 'read-secret',
     })
     expect(container.querySelector('img')?.getAttribute('src')).toBe('/api/vault/assets?path=ideas%2Fdiagram.png&token=read-secret')
+    expect(screen.queryByRole('link', { name: 'settings' })).not.toBeInTheDocument()
   })
 
   it('does not fetch external images from a token-backed page', () => {
