@@ -80,9 +80,39 @@ Token-bearing responses are private and non-cacheable, and outside-scope paths,
 links, and assets return generic unavailable responses.
 
 The owner/password and password-derived bearer authentication contract uses the
-same `NABU_PASSWORD` for human sessions and remote MCP. Shared bearer tokens
-resolve to a scoped principal, and the same authorization service is applied
-before every vault read, search, graph/link projection, listing, and mutation.
+same `NABU_PASSWORD` for human sessions and legacy remote MCP. Owners can also
+issue a short-lived connection link that is exchanged once for a durable
+owner-agent bearer credential. Shared bearer tokens and owner-agent bearer
+credentials resolve to distinct principals, and the same authorization service
+is applied before every vault read, search, graph/link projection, listing, and
+mutation.
+
+## Owner agent connection state
+
+Owner connection metadata is stored in the same server-side SQLite database at
+`NABU_DATA_PATH/shared-spaces.sqlite`, alongside shared-space leases. The
+`owner_agent_connections` table stores only the SHA-256 hash of each one-time
+link secret, the selected permissions, owner principal, expiry, and redemption
+state. The `owner_agent_credentials` table stores only the SHA-256 hash of the
+durable credential, its permissions, a 90-day expiry, and usage metadata.
+Authorization rejects the credential at or after that expiry. Redemption runs
+in one SQLite transaction so concurrent requests can produce at most one
+credential.
+
+The flow is deliberately split into two public boundaries:
+
+1. A human session calls `POST /api/agent/connections` to issue a 10-minute
+   read or read-write link.
+2. An agent calls `POST /api/agent/connections/redeem` with the full link. The
+   server consumes the link and returns the durable credential once.
+3. The agent uses `Authorization: Bearer <credential>` for the existing vault
+   API until the returned `expiresAt`. `NABU_AGENT_TOKEN` is the preferred
+   remote MCP configuration; the password-derived bearer remains available for
+   existing installations.
+
+The handoff page at `/connect/agent/<secret>` is informational and does not
+redeem the link. This keeps opening or copying the link from consuming it and
+leaves the credential exchange explicit for the receiving agent.
 
 ## Revision-aware writes
 

@@ -45,6 +45,7 @@ Current direction:
 - Authenticated folder creation and markdown note create/update by path
 - Temporary live-recursive shared spaces with one-time invite redemption
 - Rotatable, time-limited read-only browser URLs for shared spaces
+- One-time owner agent connection links with durable scoped credentials
 - Revision-aware note writes with a backwards-compatible owner migration path
 
 ## Open-source model

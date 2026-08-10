@@ -1,10 +1,60 @@
 # Nabu authentication and shared-space security
 
-Nabu uses one password for human sessions and remote MCP. A password login
-creates the signed `nabu_session` cookie, while remote MCP derives the owner
-bearer credential from that same `NABU_PASSWORD`. There is no separate agent
-token configuration; clients using the removed configuration must be
-reconfigured with the Nabu password.
+Nabu uses one password for human sessions and supports two bearer paths for
+remote MCP. A password login creates the signed `nabu_session` cookie, while
+the legacy remote MCP setup derives the owner bearer credential from that same
+`NABU_PASSWORD`. Owners can also generate a durable owner-scoped agent
+credential through the one-time connection-link flow below.
+
+## Owner agent connection links
+
+An authenticated owner can create an agent connection link from **Settings →
+Agents**. The issuance endpoint is:
+
+```http
+POST /api/agent/connections
+Content-Type: application/json
+Cookie: nabu_session=<human-session>
+
+{ "permissions": ["read"] }
+```
+
+The permissions are either `["read"]` or `["read", "write"]`; both grant
+whole-vault owner scope. The response contains a complete connection URL and
+an expiry timestamp. The URL is a short-lived, opaque capability: it expires
+after 10 minutes, can be redeemed once, and never contains the durable
+credential.
+
+The receiving agent redeems it exactly once:
+
+```http
+POST /api/agent/connections/redeem
+Content-Type: application/json
+
+{ "connectionUrl": "https://nabu.example.com/connect/agent/<opaque-secret>" }
+```
+
+Successful redemption returns the durable bearer credential once, together with
+an `expiresAt` timestamp 90 days after issuance. Store it in the agent's secret
+configuration and send it on subsequent requests as:
+
+```http
+Authorization: Bearer <owner-agent-credential>
+```
+
+The credential is stored server-side only as a SHA-256 hash, is scoped to the
+permissions selected at issuance, and is rejected after its expiry. An invalid,
+expired, or already-used link returns `410 AGENT_CONNECTION_INVALID`; an expired
+durable credential returns `401`. The current flow does not expose credential
+listing or manual revocation, so protect generated links and credentials as
+secrets and issue a new link when a credential expires or the redemption
+response is lost.
+
+Remote MCP accepts `NABU_AGENT_TOKEN` for this credential and retains
+`NABU_PASSWORD` as the backwards-compatible setup path. The owner-agent
+principal can read the full vault and can write only when the issued
+permission includes `write`; it cannot manage shared spaces as the human
+owner.
 
 ## Native remote MCP
 

@@ -253,8 +253,12 @@ function getPrincipal(principal: VaultPrincipal | undefined): VaultPrincipal {
   return principal ?? OWNER_VAULT_PRINCIPAL
 }
 
+function isFullVaultPrincipal(principal: VaultPrincipal): boolean {
+  return principal.kind === 'owner' || principal.kind === 'owner-agent'
+}
+
 function isPathInPrincipalScope(principal: VaultPrincipal, relPath: string): boolean {
-  return principal.kind === 'owner' || relPath === principal.rootPath || relPath.startsWith(`${principal.rootPath}/`)
+  return isFullVaultPrincipal(principal) || relPath === principal.rootPath || relPath.startsWith(`${principal.rootPath}/`)
 }
 
 const PUBLIC_INACCESSIBLE_LINK_TARGET = '#nabu-inaccessible'
@@ -453,7 +457,7 @@ function createPublicScopedNote(note: ParsedVaultNote, principal: VaultPrincipal
 }
 
 function createScopedIndex(index: LoadedVaultIndex, principal: VaultPrincipal): LoadedVaultIndex {
-  if (principal.kind === 'owner') {
+  if (isFullVaultPrincipal(principal)) {
     return index
   }
 
@@ -706,7 +710,7 @@ function normalizeScopedFolderPathInput(
   principal: VaultPrincipal,
 ): string {
   const normalizedPath = normalizeFolderPathInput(folderPath)
-  if (principal.kind === 'owner') {
+  if (isFullVaultPrincipal(principal)) {
     return normalizedPath
   }
 
@@ -1539,7 +1543,7 @@ async function assertWriteRevision(input: {
 }
 
 function revisionMigrationNotice(principal: VaultPrincipal, usedLegacyCompatibility: boolean): RevisionMigrationNotice | null {
-  if (principal.kind !== 'owner' || !usedLegacyCompatibility) {
+  if (!isFullVaultPrincipal(principal) || !usedLegacyCompatibility) {
     return null
   }
 

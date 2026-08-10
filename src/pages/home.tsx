@@ -663,9 +663,12 @@ export function HomePage({
             <span className="wedge">𒀭</span>
             <span className="wordmark-text">nabu</span>
           </div>
-          <a href="/logout" className="spine-logout">
-            {readOnly ? 'read-only share' : 'logout'}
-          </a>
+          <div className="spine-header-actions">
+            {!readOnly ? <Link to="/settings/agents" className="spine-settings-link">settings</Link> : null}
+            <a href="/logout" className="spine-logout">
+              {readOnly ? 'read-only share' : 'logout'}
+            </a>
+          </div>
         </header>
 
         <div className="spine-scope">

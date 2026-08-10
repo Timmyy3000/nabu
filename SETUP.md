@@ -35,9 +35,11 @@ NABU_PUBLIC_URL=https://nabu.example.com
 ```
 
 Keep `NABU_DATA_PATH` on persistent storage. It contains lease metadata and
-token hashes, never raw invite or access-token secrets. Remote MCP derives its
-owner bearer credential from the same `NABU_PASSWORD`; no separate agent-token
-configuration is supported.
+credential hashes, never raw invite, connection-link, or access-token secrets.
+After deployment, an owner can open **Settings → Agents**, choose read or
+read-write permissions, and generate a one-time connection link for an agent.
+The link expires after 10 minutes and exchanges for a credential that expires
+after 90 days; the link does not contain that credential.
 
 ## Local MCP access
 
@@ -72,10 +74,14 @@ MCP client launches from the Nabu checkout containing `package.json`.
 
 ### Remote deployed-Nabu mode
 
-Use this when Nabu is running on a VPS or another host. Configure the same
-`NABU_PASSWORD` in the local MCP client that is set on the deployed service.
-The local MCP process derives the bearer credential internally, so no separate
-agent token is needed. Use HTTPS for non-loopback URLs.
+Use this when Nabu is running on a VPS or another host. For a new owner agent,
+use the connection link in **Settings → Agents** and set the returned durable
+credential as `NABU_AGENT_TOKEN` in the local MCP client. Use HTTPS for
+non-loopback URLs.
+
+The legacy setup remains supported: configure the same `NABU_PASSWORD` in the
+local MCP client that is set on the deployed service, and the local MCP process
+derives the owner bearer credential internally.
 
 ```json
 {
@@ -86,7 +92,7 @@ agent token is needed. Use HTTPS for non-loopback URLs.
       "env": {
         "NABU_MCP_MODE": "remote",
         "NABU_URL": "https://nabu.example.com",
-        "NABU_PASSWORD": "same-password-as-the-deployed-nabu"
+        "NABU_AGENT_TOKEN": "credential-returned-by-owner-connection-link"
       }
     }
   }
@@ -95,11 +101,12 @@ agent token is needed. Use HTTPS for non-loopback URLs.
 
 The MCP process exposes traversal, search, note resources, and note
 create/update/move/delete operations through stdio. Nabu also exposes the same
-surface at `POST /mcp` over stateless Streamable HTTP. Send the password-derived
-owner bearer on every request:
+surface at `POST /mcp` over stateless Streamable HTTP. Send an issued owner-agent
+credential, the password-derived owner bearer, or a scoped shared-space bearer
+on every authenticated request:
 
 ```http
-Authorization: Bearer <credential-derived-from-NABU_PASSWORD>
+Authorization: Bearer <owner-agent-or-password-derived-credential>
 ```
 
 The native endpoint deliberately keeps the agent flow small:
@@ -119,8 +126,9 @@ reverse proxy must preserve the trusted `Host` header and browser `Origin`; use
 HTTPS for every non-loopback deployment. The v1 native endpoint uses a fixed
 bearer header rather than OAuth. REST and stdio remain supported.
 
-Remote MCP clients using the removed separate agent-token configuration must be
-reconfigured with `NABU_PASSWORD`.
+For remote stdio MCP, `NABU_AGENT_TOKEN` is preferred for owner-agent
+connections. Existing clients may continue using `NABU_PASSWORD`, which remains
+the backwards-compatible fallback.
 
 ## The non-negotiables
 

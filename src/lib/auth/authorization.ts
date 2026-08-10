@@ -15,6 +15,13 @@ export type VaultPrincipal =
       sharedSpaceId: null
     }
   | {
+      kind: 'owner-agent'
+      principalId: string
+      permissions: SharedSpacePermission[]
+      rootPath: null
+      sharedSpaceId: null
+    }
+  | {
       kind: 'shared'
       principalId: string
       permissions: SharedSpacePermission[]
@@ -100,6 +107,18 @@ export async function resolveVaultPrincipal(
 
   const store = await getSharedSpaceStore()
   if (bearerToken) {
+    const ownerAgentCredential = store.findOwnerAgentCredential(hashSecret(bearerToken), nowMs)
+    if (ownerAgentCredential) {
+      store.touchOwnerAgentCredential(ownerAgentCredential.id, nowMs)
+      return {
+        kind: 'owner-agent',
+        principalId: `owner-agent:${ownerAgentCredential.id}`,
+        permissions: ownerAgentCredential.permissions,
+        rootPath: null,
+        sharedSpaceId: null,
+      }
+    }
+
     const accessToken = store.findAccessToken(hashSecret(bearerToken), nowMs)
     if (accessToken) {
       store.touchAccessToken(accessToken.id, nowMs)
@@ -182,7 +201,7 @@ export async function requireVaultPrincipal(
 }
 
 export function isVaultPathInScope(principal: VaultPrincipal, normalizedPath: string): boolean {
-  return principal.kind === 'owner' || normalizedPath === principal.rootPath || normalizedPath.startsWith(`${principal.rootPath}/`)
+  return principal.kind === 'owner' || principal.kind === 'owner-agent' || normalizedPath === principal.rootPath || normalizedPath.startsWith(`${principal.rootPath}/`)
 }
 
 export function assertVaultPathAccess(
