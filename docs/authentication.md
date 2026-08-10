@@ -53,6 +53,39 @@ principal can read the full vault and can write only when the issued
 permission includes `write`; it cannot manage shared spaces as the human
 owner.
 
+## Native remote MCP
+
+The native MCP endpoint is `POST /mcp` over stateless Streamable HTTP. It uses
+the same password-derived owner bearer as remote stdio and does not accept the
+browser session cookie or URL query tokens:
+
+```http
+Authorization: Bearer <owner-credential-or-scoped-access-token>
+```
+
+The credential is durable across agents, sessions, and chats. A request without
+an `Authorization` header receives a bootstrap surface containing only
+`redeem_shared_space_invite`; it cannot list resources or read the vault. An
+invalid bearer returns `401` with a Bearer challenge and never falls back to
+bootstrap.
+
+Redeem an invite through that bootstrap tool, persist the returned access token
+in an approved secret profile, and reuse it. The token carries the shared root,
+read/read-write permission, and lease expiry. Each MCP request re-checks expiry
+and revocation. Owner-only MCP tools manage proposals, invites, leases, and
+revocation; shared collaborators receive only the scoped vault surface.
+
+MCP redemption accepts an optional `Idempotency-Key`. When it is omitted, Nabu
+derives a stable non-secret key from the invite input, keeping retries safe
+without requiring agents to invent another credential. Raw invite URLs, access
+tokens, and bearer credentials must never be logged or stored in ordinary
+workspace files.
+
+In production, configure `NABU_PUBLIC_URL` and expose the endpoint through
+HTTPS. Nabu validates the canonical `Host` and any present browser `Origin`
+before dispatch. Non-production request-derived origins are allowed only for
+loopback hosts. OAuth discovery is intentionally outside the v1 flow.
+
 ## Shared-space credentials
 
 Shared-space invites are one-time capabilities. They are valid for one hour,

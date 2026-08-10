@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsDotmdRouteImport } from './routes/agents[.]md'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LogoutRouteImport } from './routes/logout'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as SettingsAgentsRouteImport } from './routes/settings/agents'
 import { Route as ApiAgentBootstrapRouteImport } from './routes/api/agent/bootstrap'
@@ -58,6 +59,11 @@ const LoginRoute = LoginRouteImport.update({
 const LogoutRoute = LogoutRouteImport.update({
   id: '/logout',
   path: '/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -206,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/mcp': typeof McpRoute
   '/api/health': typeof ApiHealthRoute
   '/settings/agents': typeof SettingsAgentsRoute
   '/api/agent/bootstrap': typeof ApiAgentBootstrapRoute
@@ -238,6 +245,7 @@ export interface FileRoutesByTo {
   '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/mcp': typeof McpRoute
   '/api/health': typeof ApiHealthRoute
   '/settings/agents': typeof SettingsAgentsRoute
   '/api/agent/bootstrap': typeof ApiAgentBootstrapRoute
@@ -271,6 +279,7 @@ export interface FileRoutesById {
   '/agents.md': typeof AgentsDotmdRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
+  '/mcp': typeof McpRoute
   '/api/health': typeof ApiHealthRoute
   '/settings/agents': typeof SettingsAgentsRoute
   '/api/agent/bootstrap': typeof ApiAgentBootstrapRoute
@@ -305,6 +314,7 @@ export interface FileRouteTypes {
     | '/agents.md'
     | '/login'
     | '/logout'
+    | '/mcp'
     | '/api/health'
     | '/settings/agents'
     | '/api/agent/bootstrap'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/agents.md'
     | '/login'
     | '/logout'
+    | '/mcp'
     | '/api/health'
     | '/settings/agents'
     | '/api/agent/bootstrap'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
     | '/agents.md'
     | '/login'
     | '/logout'
+    | '/mcp'
     | '/api/health'
     | '/settings/agents'
     | '/api/agent/bootstrap'
@@ -402,6 +414,7 @@ export interface RootRouteChildren {
   AgentsDotmdRoute: typeof AgentsDotmdRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
+  McpRoute: typeof McpRoute
   ApiHealthRoute: typeof ApiHealthRoute
   SettingsAgentsRoute: typeof SettingsAgentsRoute
   ApiAgentBootstrapRoute: typeof ApiAgentBootstrapRoute
@@ -454,6 +467,13 @@ declare module '@tanstack/react-router' {
       path: '/logout'
       fullPath: '/logout'
       preLoaderRoute: typeof LogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/health': {
@@ -670,6 +690,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsDotmdRoute: AgentsDotmdRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
+  McpRoute: McpRoute,
   ApiHealthRoute: ApiHealthRoute,
   SettingsAgentsRoute: SettingsAgentsRoute,
   ApiAgentBootstrapRoute: ApiAgentBootstrapRoute,

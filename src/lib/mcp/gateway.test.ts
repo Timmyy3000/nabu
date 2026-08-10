@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   McpConfigurationError,
   createRemoteKnowledgeGateway,
+  deriveMcpIdempotencyKey,
   getMcpModeFromEnvironment,
   prepareMcpEnvironment,
   validateMcpEnvironment,
@@ -86,5 +87,25 @@ describe('remote MCP gateway', () => {
     })
 
     await expect(gateway.searchNotes({ query: 'agent', limit: 10 })).resolves.toEqual({ results: [] })
+  })
+
+  it('derives and forwards a stable redemption idempotency key', async () => {
+    const inviteUrl = 'https://nabu.example/invites/invite-secret'
+    const fetchFn = vi.fn<typeof fetch>(async (input, init) => {
+      expect(String(input)).toBe('https://nabu.example/api/shared-spaces/invites/redeem')
+      const headers = new Headers(init?.headers)
+      expect(headers.get('Authorization')).toBe(`Bearer ${CREDENTIAL}`)
+      expect(headers.get('Idempotency-Key')).toBe(deriveMcpIdempotencyKey(inviteUrl))
+      expect(init?.body).toBe(JSON.stringify({ inviteUrl }))
+      return new Response(JSON.stringify({ accessToken: 'scoped-token' }), { status: 200 })
+    })
+    const gateway = createRemoteKnowledgeGateway({
+      baseUrl: new URL('https://nabu.example'),
+      credential: CREDENTIAL,
+      fetchFn,
+    })
+
+    await expect(gateway.redeemSharedSpaceInvite(inviteUrl)).resolves.toEqual({ accessToken: 'scoped-token' })
+    expect(deriveMcpIdempotencyKey(inviteUrl)).toMatch(/^[A-Za-z0-9._~-]{22,256}$/)
   })
 })
