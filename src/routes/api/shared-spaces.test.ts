@@ -6,9 +6,14 @@ import { AUTH_COOKIE_NAME, createSessionToken } from '../../lib/auth/session'
 import { __resetSharedSpaceServiceForTests } from '../../lib/shared-spaces/service'
 import { Route as ProposalsRoute } from './shared-spaces/proposals'
 import { Route as SpacesRoute } from './shared-spaces/index'
+import { Route as SpaceRoute } from './shared-spaces/$sharedSpaceId'
 import { Route as ExtendRoute } from './shared-spaces/$sharedSpaceId/extend'
+import { Route as InvitesRoute } from './shared-spaces/$sharedSpaceId/invites'
+import { Route as RevokeRoute } from './shared-spaces/$sharedSpaceId/revoke'
 import { Route as RedeemRoute } from './shared-spaces/invites/redeem'
 import { Route as ReadLinkRoute } from './shared-spaces/$sharedSpaceId/read-link'
+import { Route as IssueConnectionRoute } from './agent/connections/index'
+import { Route as RedeemConnectionRoute } from './agent/connections/redeem'
 
 const originalKnowledgePath = process.env.KNOWLEDGE_PATH
 const originalDataPath = process.env.NABU_DATA_PATH
@@ -41,6 +46,34 @@ async function fixture() {
 
 function ownerHeaders() {
   return { cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(createSessionToken())}` }
+}
+
+async function ownerAgentHeaders(permissions: Array<'read' | 'write'>) {
+  const postHandler = (route: { options: { server?: { handlers?: unknown } } }) =>
+    (route.options.server?.handlers as { POST: (input: { request: Request }) => Promise<Response> }).POST
+  const issued = await postHandler(IssueConnectionRoute)({
+    request: new Request('http://localhost:3000/api/agent/connections', {
+      method: 'POST',
+      headers: { ...ownerHeaders(), 'content-type': 'application/json' },
+      body: JSON.stringify({ permissions }),
+    }),
+  })
+  if (issued.status !== 201) {
+    throw new Error(`connection issue failed with status ${issued.status}`)
+  }
+  const { connectionUrl } = await issued.json() as { connectionUrl: string }
+  const redeemed = await postHandler(RedeemConnectionRoute)({
+    request: new Request('http://localhost:3000/api/agent/connections/redeem', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ connectionUrl }),
+    }),
+  })
+  if (redeemed.status !== 200) {
+    throw new Error(`connection redeem failed with status ${redeemed.status}`)
+  }
+  const { credential } = await redeemed.json() as { credential: string }
+  return { authorization: `Bearer ${credential}` }
 }
 
 describe('shared-space HTTP API', () => {
@@ -208,5 +241,78 @@ describe('shared-space HTTP API', () => {
     expect(confirmed.status).toBe(201)
     expect(invite.inviteUrl).toMatch(/^https:\/\/trusted\.example\/base\/invites\//)
     expect(invite.inviteUrl).not.toContain('evil.example')
+  })
+
+  it('lets a write owner-agent propose, confirm, inspect, invite, and revoke as the owner', async () => {
+    await fixture()
+    const agentHeaders = await ownerAgentHeaders(['read', 'write'])
+
+    const proposalResponse = await ProposalsRoute.options.server!.handlers!.POST({
+      request: new Request('http://localhost:3000/api/shared-spaces/proposals', {
+        method: 'POST',
+        headers: { ...agentHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ path: 'little-helpers', durationDays: 14 }),
+      }),
+    })
+    expect(proposalResponse.status).toBe(201)
+    const proposal = await proposalResponse.json()
+
+    const confirmed = await SpacesRoute.options.server!.handlers!.POST({
+      request: new Request('http://localhost:3000/api/shared-spaces', {
+        method: 'POST',
+        headers: { ...agentHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ proposalId: proposal.proposalId, confirmed: true, durationDays: 14 }),
+      }),
+    })
+    expect(confirmed.status).toBe(201)
+    const space = await confirmed.json()
+
+    const fetched = await SpaceRoute.options.server!.handlers!.GET({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}`, { headers: agentHeaders }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    expect(fetched.status).toBe(200)
+
+    const listed = await SpacesRoute.options.server!.handlers!.GET({
+      request: new Request('http://localhost:3000/api/shared-spaces', { headers: ownerHeaders() }),
+    })
+    expect((await listed.json()).spaces).toHaveLength(1)
+
+    const invited = await InvitesRoute.options.server!.handlers!.POST({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}/invites`, {
+        method: 'POST',
+        headers: agentHeaders,
+      }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    expect(invited.status).toBe(201)
+
+    const revoked = await RevokeRoute.options.server!.handlers!.POST({
+      request: new Request(`http://localhost:3000/api/shared-spaces/${space.sharedSpaceId}/revoke`, {
+        method: 'POST',
+        headers: agentHeaders,
+      }),
+      params: { sharedSpaceId: space.sharedSpaceId },
+    })
+    expect(revoked.status).toBe(200)
+  })
+
+  it('rejects shared-space management for a read-only owner-agent credential', async () => {
+    await fixture()
+    const agentHeaders = await ownerAgentHeaders(['read'])
+
+    const proposalResponse = await ProposalsRoute.options.server!.handlers!.POST({
+      request: new Request('http://localhost:3000/api/shared-spaces/proposals', {
+        method: 'POST',
+        headers: { ...agentHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ path: 'little-helpers', durationDays: 14 }),
+      }),
+    })
+    expect(proposalResponse.status).toBe(403)
+
+    const listed = await SpacesRoute.options.server!.handlers!.GET({
+      request: new Request('http://localhost:3000/api/shared-spaces', { headers: agentHeaders }),
+    })
+    expect(listed.status).toBe(403)
   })
 })

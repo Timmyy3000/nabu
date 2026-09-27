@@ -66,6 +66,10 @@ function contextForPrincipal(principal: VaultPrincipal | null): McpRequestContex
     return { principal, surface: 'owner' }
   }
 
+  if (principal.kind === 'owner-agent') {
+    return { principal, surface: principal.permissions.includes('write') ? 'owner' : 'shared-read' }
+  }
+
   return {
     principal,
     surface: principal.permissions.includes('write') ? 'shared-read-write' : 'shared-read',

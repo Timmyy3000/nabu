@@ -4,6 +4,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { deriveAgentCredential } from '../auth/agent-credential'
+import { AUTH_COOKIE_NAME, createSessionToken } from '../auth/session'
+import { Route as IssueConnectionRoute } from '../../routes/api/agent/connections/index'
+import { Route as RedeemConnectionRoute } from '../../routes/api/agent/connections/redeem'
 import { SharedSpaceService, __resetSharedSpaceServiceForTests } from '../shared-spaces/service'
 import { handleMcpRequest } from './http'
 
@@ -91,6 +94,38 @@ async function sharedAccessToken(permissions: Array<'read' | 'write'>): Promise<
   return redeemed.accessToken
 }
 
+async function ownerAgentBearer(permissions: Array<'read' | 'write'>): Promise<string> {
+  process.env.NABU_PUBLIC_URL = 'http://localhost:3000'
+  const postHandler = (route: { options: { server?: { handlers?: unknown } } }) =>
+    (route.options.server?.handlers as { POST: (input: { request: Request }) => Promise<Response> }).POST
+  const issued = await postHandler(IssueConnectionRoute)({
+    request: new Request('http://localhost:3000/api/agent/connections', {
+      method: 'POST',
+      headers: {
+        cookie: `${AUTH_COOKIE_NAME}=${encodeURIComponent(createSessionToken())}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ permissions }),
+    }),
+  })
+  if (issued.status !== 201) {
+    throw new Error(`connection issue failed with status ${issued.status}`)
+  }
+  const { connectionUrl } = await issued.json() as { connectionUrl: string }
+  const redeemed = await postHandler(RedeemConnectionRoute)({
+    request: new Request('http://localhost:3000/api/agent/connections/redeem', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ connectionUrl }),
+    }),
+  })
+  if (redeemed.status !== 200) {
+    throw new Error(`connection redeem failed with status ${redeemed.status}`)
+  }
+  const { credential } = await redeemed.json() as { credential: string }
+  return credential
+}
+
 describe('native MCP HTTP authentication', () => {
   it('exposes only invite redemption without a bearer credential', async () => {
     await fixture()
@@ -118,6 +153,32 @@ describe('native MCP HTTP authentication', () => {
     expect(tools).toContain('propose_shared_space')
     expect(tools).toContain('create_note')
     expect(tools).toContain('redeem_shared_space_invite')
+  })
+
+  it('gives a write owner-agent credential the full owner surface', async () => {
+    await fixture()
+
+    const tools = await listTools({ authorization: `Bearer ${await ownerAgentBearer(['read', 'write'])}` })
+
+    expect(tools).toContain('propose_shared_space')
+    expect(tools).toContain('confirm_shared_space')
+    expect(tools).toContain('list_shared_spaces')
+    expect(tools).toContain('get_shared_space')
+    expect(tools).toContain('revoke_shared_space')
+    expect(tools).toContain('create_shared_space_invite')
+    expect(tools).toContain('extend_shared_space')
+    expect(tools).toContain('create_note')
+  })
+
+  it('keeps a read-only owner-agent credential on the read-only surface', async () => {
+    await fixture()
+
+    const tools = await listTools({ authorization: `Bearer ${await ownerAgentBearer(['read'])}` })
+
+    expect(tools).toContain('read_note')
+    expect(tools).not.toContain('create_note')
+    expect(tools).not.toContain('list_shared_spaces')
+    expect(tools).not.toContain('create_shared_space_invite')
   })
 
   it('selects read-only and read-write surfaces from the redeemed token scope', async () => {

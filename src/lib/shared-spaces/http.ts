@@ -12,10 +12,14 @@ export async function requireSharedSpaceOwner(request: Request): Promise<{
   }
 
   if (auth.principal?.kind !== 'owner') {
-    return {
-      principal: null,
-      response: Response.json({ error: 'Owner authorization is required.' }, { status: 403 }),
+    const delegated = auth.principal?.kind === 'owner-agent' && auth.principal.permissions.includes('write')
+    if (!delegated) {
+      return {
+        principal: null,
+        response: Response.json({ error: 'Owner authorization is required.' }, { status: 403 }),
+      }
     }
+    return { principal: { ...auth.principal!, principalId: 'owner' }, response: null }
   }
 
   return auth

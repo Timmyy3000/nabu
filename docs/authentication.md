@@ -53,8 +53,9 @@ response is lost.
 Remote MCP accepts `NABU_AGENT_TOKEN` for this credential and retains
 `NABU_PASSWORD` as the backwards-compatible setup path. The owner-agent
 principal can read the full vault and can write only when the issued
-permission includes `write`; it cannot manage shared spaces as the human
-owner.
+permission includes `write`. A write owner-agent credential administers
+shared spaces with the owner's authority (spaces stay owned by the owner);
+a read-only credential cannot manage shared spaces.
 
 ## Native remote MCP
 
@@ -75,8 +76,9 @@ bootstrap.
 Redeem an invite through that bootstrap tool, persist the returned access token
 in an approved secret profile, and reuse it. The token carries the shared root,
 read/read-write permission, and lease expiry. Each MCP request re-checks expiry
-and revocation. Owner-only MCP tools manage proposals, invites, leases, and
-revocation; shared collaborators receive only the scoped vault surface.
+and revocation. Owner and write owner-agent MCP tools manage proposals,
+invites, leases, and revocation; shared collaborators receive only the
+scoped vault surface.
 
 MCP redemption accepts an optional `Idempotency-Key`. When it is omitted, Nabu
 derives a stable non-secret key from the invite input, keeping retries safe
