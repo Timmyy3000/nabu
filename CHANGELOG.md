@@ -4,6 +4,17 @@ All notable changes to Nabu will be documented in this file.
 
 ## Unreleased
 
+## [0.7.4] - 2026-09-27
+
+### Added
+
+- Granted write owner-agent credentials (Settings → Agents connection links
+  with read and write) full shared-space management parity with the owner
+  across MCP and HTTP: propose, confirm, list, get, invite, revoke, extend,
+  and read-link management. Spaces stay owned by the owner, so the owner
+  session keeps full visibility and control. Read-only owner-agent
+  credentials remain read-only.
+
 ## [0.7.3] - 2026-08-08
 
 ### Added
